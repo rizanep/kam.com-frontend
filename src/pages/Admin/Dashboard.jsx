@@ -25,6 +25,9 @@ import {
   Eye,
   MoreHorizontal,
   Star,
+  Activity,
+  Calendar,
+  Mail,
 } from 'lucide-react'
 
 const API_BASE_URL = 'http://localhost:8000/api/auth';
@@ -79,6 +82,7 @@ const AdminDashboard = () => {
     pendingVerifications: 0,
     totalFreelancers: 0,
     totalClients: 0,
+    totalAdmins: 0,
     verifiedUsers: 0,
     premiumUsers: 0,
     verificationRate: 0,
@@ -152,17 +156,18 @@ const AdminDashboard = () => {
       setLoading(true);
       const data = await apiCall('/admin/stats/');
       
-      // Safely extract and convert data with defaults
+      // Safely extract and convert data with defaults - matching new API response
       setStats({
         totalUsers: safeNumber(data?.total_users),
-        activeJobs: safeNumber(data?.active_jobs),
-        completedJobs: safeNumber(data?.completed_jobs),
-        revenue: safeNumber(data?.revenue),
-        growthRate: safeNumber(data?.growth_rate),
-        ticketsOpen: safeNumber(data?.tickets_open),
+        activeJobs: 0, // Not available in new API
+        completedJobs: 0, // Not available in new API
+        revenue: 0, // Not available in new API
+        growthRate: 0, // Not available in new API
+        ticketsOpen: 0, // Not available in new API
         pendingVerifications: safeNumber(data?.total_users) - safeNumber(data?.verified_users),
         totalFreelancers: safeNumber(data?.total_freelancers),
         totalClients: safeNumber(data?.total_clients),
+        totalAdmins: safeNumber(data?.total_admins),
         verifiedUsers: safeNumber(data?.verified_users),
         premiumUsers: safeNumber(data?.premium_users),
         verificationRate: safeNumber(data?.verification_rate),
@@ -187,10 +192,12 @@ const AdminDashboard = () => {
       }
       
       if (userType) {
-        url += `&user_type=${userType}`;
+        url += `&account_type=${userType}`;
       }
 
       const data = await apiCall(url);
+      
+      // The new API returns paginated data directly
       setUsers(safeArray(data?.results));
       setUsersTotalPages(Math.ceil(safeNumber(data?.count) / 10));
     } catch (err) {
@@ -204,12 +211,8 @@ const AdminDashboard = () => {
   // Handle view profile - redirect to user's profile page
   const handleViewProfile = (user) => {
     if (user?.id) {
-      // Store user data in localStorage for the profile page to access
-      localStorage.setItem('selectedUserId', user.id);
-      localStorage.setItem('selectedUserData', JSON.stringify(user));
-      
-      // Navigate to client profile route
-      navigate('/client/profile');
+      // Navigate to freelancer profile route if user has freelancer account type
+      navigate(`/freelancer/profile/${user.id}`);
     }
   };
 
@@ -379,13 +382,18 @@ const AdminDashboard = () => {
                     localStorage.setItem('selectedUserId', user.id);
                     localStorage.setItem('selectedUserData', JSON.stringify(user));
                     
-                    // Navigate to appropriate dashboard based on user type
-                    if (user.user_type === 'client') {
+                    // Navigate to appropriate dashboard based on primary account type
+                    const primaryAccountType = user.account_types && user.account_types.length > 0 ? user.account_types[0] : null;
+                    
+                    if (primaryAccountType === 'client') {
                       navigate('/client/dashboard');
-                    } else if (user.user_type === 'freelancer') {
+                    } else if (primaryAccountType === 'freelancer') {
                       navigate('/freelancer/dashboard');
-                    } else {
+                    } else if (primaryAccountType === 'admin') {
                       navigate('/admin/dashboard');
+                    } else {
+                      // Default fallback
+                      navigate('/dashboard');
                     }
                     setIsOpen(false);
                   }}
@@ -535,6 +543,9 @@ const AdminDashboard = () => {
                     <div className="text-green-600">
                       {formatNumber(stats.totalClients)} Clients
                     </div>
+                    <div className="text-purple-600">
+                      {formatNumber(stats.totalAdmins)} Admins
+                    </div>
                   </div>
                 </div>
               </div>
@@ -602,16 +613,59 @@ const AdminDashboard = () => {
                 </div>
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {stats.usersByCountry.slice(0, 6).map((country, index) => (
+                    {stats.usersByCountry.slice(0, 6).map((countryData, index) => (
                       <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-                        <span className="font-medium">{safeString(country?.country, 'Unknown')}</span>
-                        <span className="text-blue-600 font-semibold">{formatNumber(country?.count)}</span>
+                        <span className="font-medium">{safeString(countryData?.country, 'Unknown')}</span>
+                        <span className="text-blue-600 font-semibold">{formatNumber(countryData?.count)}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
             )}
+
+            {/* Quick Actions */}
+            <div className="bg-white rounded-lg shadow mb-8">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button 
+                    onClick={() => setActiveTab('users')}
+                    className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all"
+                  >
+                    <div className="flex items-center mb-2">
+                      <Users className="h-5 w-5 text-blue-600 mr-2" />
+                      <span className="font-medium">Manage Users</span>
+                    </div>
+                    <p className="text-sm text-gray-600">View, edit, and manage user accounts</p>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setActiveTab('reports')}
+                    className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all"
+                  >
+                    <div className="flex items-center mb-2">
+                      <BarChart2 className="h-5 w-5 text-green-600 mr-2" />
+                      <span className="font-medium">View Reports</span>
+                    </div>
+                    <p className="text-sm text-gray-600">Access analytics and reports</p>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setActiveTab('settings')}
+                    className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all"
+                  >
+                    <div className="flex items-center mb-2">
+                      <Settings className="h-5 w-5 text-purple-600 mr-2" />
+                      <span className="font-medium">Platform Settings</span>
+                    </div>
+                    <p className="text-sm text-gray-600">Configure platform settings</p>
+                  </button>
+                </div>
+              </div>
+            </div>
           </>
         )}
 
@@ -643,7 +697,7 @@ const AdminDashboard = () => {
                     onChange={(e) => setUsersFilter(e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
-                    <option value="">All User Types</option>
+                    <option value="">All Account Types</option>
                     <option value="freelancer">Freelancers</option>
                     <option value="client">Clients</option>
                     <option value="admin">Admins</option>
@@ -666,7 +720,7 @@ const AdminDashboard = () => {
                             User
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Type
+                            Account Types
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Status
@@ -691,13 +745,16 @@ const AdminDashboard = () => {
                             id: user?.id,
                             full_name: safeString(user?.full_name, 'Unknown User'),
                             email: safeString(user?.email, 'No email'),
-                            user_type: safeString(user?.user_type, 'unknown'),
+                            account_types: safeArray(user?.account_types),
                             is_active: Boolean(user?.is_active),
                             is_verified: Boolean(user?.is_verified),
                             groups: safeArray(user?.groups),
                             profile_completion_percentage: safeNumber(user?.profile_completion_percentage),
                             last_activity: user?.last_activity
                           };
+
+                          // Get primary account type for display
+                          const primaryAccountType = safeUser.account_types.length > 0 ? safeUser.account_types[0] : 'unknown';
 
                           return (
                             <tr key={safeUser.id || Math.random()}>
@@ -715,15 +772,28 @@ const AdminDashboard = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  safeUser.user_type === 'freelancer' 
-                                    ? 'bg-blue-100 text-blue-800' 
-                                    : safeUser.user_type === 'client'
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-purple-100 text-purple-800'
-                                }`}>
-                                  {safeUser.user_type}
-                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {safeUser.account_types.length > 0 ? (
+                                    safeUser.account_types.map((accountType, index) => (
+                                      <span
+                                        key={index}
+                                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                          accountType === 'freelancer' 
+                                            ? 'bg-blue-100 text-blue-800' 
+                                            : accountType === 'client'
+                                            ? 'bg-green-100 text-green-800'
+                                            : 'bg-purple-100 text-purple-800'
+                                        }`}
+                                      >
+                                        {accountType}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                      No Type
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex flex-col space-y-1">
@@ -831,10 +901,15 @@ const AdminDashboard = () => {
             </div>
             <div className="p-6">
               <div className="bg-gray-100 rounded-lg p-6 text-center">
+                <Briefcase className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Jobs Management</h3>
                 <p className="text-gray-600">
                   Jobs management interface would be implemented here with backend integration.
                   Similar pattern to user management with API calls for jobs data.
                 </p>
+                <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                  Coming Soon
+                </button>
               </div>
             </div>
           </div>
@@ -866,6 +941,10 @@ const AdminDashboard = () => {
                     <div className="flex justify-between">
                       <span>Clients:</span>
                       <span className="font-semibold">{formatNumber(stats.totalClients)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Admins:</span>
+                      <span className="font-semibold">{formatNumber(stats.totalAdmins)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Verification Rate:</span>
@@ -913,6 +992,21 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Activity Chart Placeholder */}
+              <div className="bg-gray-100 rounded-lg p-6">
+                <h3 className="text-lg font-medium mb-4 flex items-center">
+                  <Activity className="h-5 w-5 mr-2 text-blue-600" />
+                  Platform Activity Over Time
+                </h3>
+                <div className="h-64 flex items-center justify-center text-gray-500">
+                  <div className="text-center">
+                    <BarChart2 className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                    <p>Chart visualization would be implemented here</p>
+                    <p className="text-sm">Integration with charting library like Chart.js or Recharts</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -945,6 +1039,11 @@ const AdminDashboard = () => {
                         Email Notification Templates
                       </button>
                     </li>
+                    <li>
+                      <button className="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                        Payment Gateway Configuration
+                      </button>
+                    </li>
                   </ul>
                 </div>
 
@@ -969,6 +1068,59 @@ const AdminDashboard = () => {
                         Security Audit Logs
                       </button>
                     </li>
+                    <li>
+                      <button className="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                        Two-Factor Authentication
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-gray-100 p-6 rounded-lg">
+                  <h3 className="text-lg font-medium mb-4 flex items-center">
+                    <Mail className="h-5 w-5 mr-2 text-blue-600" />
+                    Communication Settings
+                  </h3>
+                  <ul className="space-y-2">
+                    <li>
+                      <button className="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                        Email Templates
+                      </button>
+                    </li>
+                    <li>
+                      <button className="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                        SMS Configuration
+                      </button>
+                    </li>
+                    <li>
+                      <button className="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                        Push Notification Settings
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-gray-100 p-6 rounded-lg">
+                  <h3 className="text-lg font-medium mb-4 flex items-center">
+                    <FileText className="h-5 w-5 mr-2 text-blue-600" />
+                    Content Management
+                  </h3>
+                  <ul className="space-y-2">
+                    <li>
+                      <button className="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                        Terms of Service
+                      </button>
+                    </li>
+                    <li>
+                      <button className="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                        Privacy Policy
+                      </button>
+                    </li>
+                    <li>
+                      <button className="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                        Platform Guidelines
+                      </button>
+                    </li>
                   </ul>
                 </div>
               </div>
@@ -982,11 +1134,41 @@ const AdminDashboard = () => {
               <h2 className="text-lg font-medium text-gray-900">Support Management</h2>
             </div>
             <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="bg-blue-50 p-6 rounded-lg">
+                  <h3 className="text-lg font-medium mb-2 flex items-center">
+                    <MessageSquare className="h-5 w-5 mr-2 text-blue-600" />
+                    Active Tickets
+                  </h3>
+                  <div className="text-3xl font-bold text-blue-600 mb-2">24</div>
+                  <p className="text-sm text-gray-600">Tickets awaiting response</p>
+                </div>
+
+                <div className="bg-green-50 p-6 rounded-lg">
+                  <h3 className="text-lg font-medium mb-2 flex items-center">
+                    <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
+                    Resolved Today
+                  </h3>
+                  <div className="text-3xl font-bold text-green-600 mb-2">18</div>
+                  <p className="text-sm text-gray-600">Tickets resolved in the last 24h</p>
+                </div>
+              </div>
+
               <div className="bg-gray-100 rounded-lg p-6 text-center">
-                <p className="text-gray-600">
+                <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Support Ticket Management</h3>
+                <p className="text-gray-600 mb-4">
                   Support ticket management interface would be implemented here.
                   This would include ticket viewing, assignment, and response functionality.
                 </p>
+                <div className="flex justify-center space-x-3">
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    View All Tickets
+                  </button>
+                  <button className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                    Create Announcement
+                  </button>
+                </div>
               </div>
             </div>
           </div>

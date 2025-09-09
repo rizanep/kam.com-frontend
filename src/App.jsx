@@ -10,6 +10,7 @@ import Navbar from './components/Layout/Navbar'
 import Footer from './components/Layout/Footer'
 import UserProfile from './pages/Client/Profile'
 import ChangePassword from './components/ChangePassword'
+import FreelancerProfile from './pages/Client/OutProfile'
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/freelancer/dashboard" element={<FreelancerDashboard />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path='/user/resetpass' element={<ChangePassword />}/>
+          <Route path='/freelancer/profile/:userId' element={<FreelancerProfile/>}/>
         </Routes>
       </main>
       <Footer />

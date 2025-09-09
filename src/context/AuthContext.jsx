@@ -76,6 +76,14 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
+  // Helper function to get primary account type for navigation
+  const getPrimaryAccountType = (accountTypes) => {
+    if (!Array.isArray(accountTypes) || accountTypes.length === 0) {
+      return 'freelancer'; // default fallback
+    }
+    return accountTypes[0]; // Use first account type as primary
+  };
+
   // Check if user is authenticated on app load
   useEffect(() => {
     checkAuth();
@@ -111,11 +119,21 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   };
+// In your AuthContext.js, update the login function:
 
-  const login = async (email, password) => {
+const login = async (email, password) => {
   try {
     setError(null);
     const response = await api.post('/auth/login/', { email, password });
+
+    // Check if MFA is required
+    if (response.data.mfa_required) {
+      // Don't proceed with normal login flow
+      // Instead, throw an error that contains the MFA response
+      const mfaError = new Error('MFA Required');
+      mfaError.response = { data: response.data };
+      throw mfaError;
+    }
 
     const { access, refresh, user: userData } = response.data;
 
@@ -126,14 +144,19 @@ export const AuthProvider = ({ children }) => {
     // Set user data
     setUser(userData);
 
-    // Redirect logic
+    // Redirect logic using account types array
     const redirectPath = sessionStorage.getItem('redirectAfterLogin');
     if (redirectPath) {
       sessionStorage.removeItem('redirectAfterLogin');
       navigate(redirectPath);
     } else {
-      if (userData.user_type === 'client') {
+      // Use primary account type for navigation
+      const primaryAccountType = getPrimaryAccountType(userData.account_types);
+      
+      if (primaryAccountType === 'client') {
         navigate('/client/dashboard');
+      } else if (primaryAccountType === 'admin') {
+        navigate('/admin/dashboard');
       } else {
         navigate('/freelancer/dashboard');
       }
@@ -142,6 +165,11 @@ export const AuthProvider = ({ children }) => {
     return response.data;
   } catch (error) {
     let errorMessage = 'Login failed. Please try again.';
+
+    if (error.message === 'MFA Required') {
+      // Re-throw MFA errors to be handled by Login component
+      throw error;
+    }
 
     if (error.response?.data) {
       if (error.response.data.non_field_errors) {
@@ -155,12 +183,62 @@ export const AuthProvider = ({ children }) => {
     throw new Error(errorMessage);
   }
 };
+  // const login = async (email, password) => {
+  //   try {
+  //     setError(null);
+  //     const response = await api.post('/auth/login/', { email, password });
+
+  //     const { access, refresh, user: userData } = response.data;
+
+  //     // Store tokens
+  //     localStorage.setItem('access_token', access);
+  //     localStorage.setItem('refresh_token', refresh);
+
+  //     // Set user data
+  //     setUser(userData);
+
+  //     // Redirect logic using account types array
+  //     const redirectPath = sessionStorage.getItem('redirectAfterLogin');
+  //     if (redirectPath) {
+  //       sessionStorage.removeItem('redirectAfterLogin');
+  //       navigate(redirectPath);
+  //     } else {
+  //       // Use primary account type for navigation
+  //       const primaryAccountType = getPrimaryAccountType(userData.account_types);
+        
+  //       if (primaryAccountType === 'client') {
+  //         navigate('/client/dashboard');
+  //       } else if (primaryAccountType === 'admin') {
+  //         navigate('/admin/dashboard');
+  //       } else {
+  //         navigate('/freelancer/dashboard');
+  //       }
+  //     }
+
+  //     return response.data;
+  //   } catch (error) {
+  //     let errorMessage = 'Login failed. Please try again.';
+
+  //     if (error.response?.data) {
+  //       if (error.response.data.non_field_errors) {
+  //         errorMessage = error.response.data.non_field_errors[0];
+  //       } else if (error.response.data.detail) {
+  //         errorMessage = error.response.data.detail;
+  //       }
+  //     }
+
+  //     setError(errorMessage);
+  //     throw new Error(errorMessage);
+  //   }
+  // };
 
   const register = async (userData) => {
     try {
       setError(null);
       const response = await api.post('/auth/register/', userData);
-      console.log(userData)
+      console.log('Registration data sent:', userData);
+      console.log('Registration response:', response.data);
+      
       const { access, refresh, user: newUser } = response.data;
       
       // Store tokens
@@ -170,9 +248,13 @@ export const AuthProvider = ({ children }) => {
       // Set user data
       setUser(newUser);
       
-      // Redirect based on user type
-      if (newUser.user_type === 'client') {
+      // Redirect based on primary account type
+      const primaryAccountType = getPrimaryAccountType(newUser.account_types);
+      
+      if (primaryAccountType === 'client') {
         navigate('/client/dashboard');
+      } else if (primaryAccountType === 'admin') {
+        navigate('/admin/dashboard');
       } else {
         navigate('/freelancer/dashboard');
       }
@@ -181,12 +263,16 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       let errorMessage = 'Registration failed. Please try again.';
       
+      console.error('Registration error:', error.response?.data);
+      
       if (error.response?.data) {
-        // Handle Django validation errors
+        // Handle Django validation errors for new API structure
         if (error.response.data.email) {
           errorMessage = error.response.data.email[0];
         } else if (error.response.data.password) {
           errorMessage = error.response.data.password[0];
+        } else if (error.response.data.account_types) {
+          errorMessage = error.response.data.account_types[0];
         } else if (error.response.data.non_field_errors) {
           errorMessage = error.response.data.non_field_errors[0];
         } else if (typeof error.response.data === 'object') {
@@ -230,6 +316,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Helper function to check if user has specific account type
+  const hasAccountType = (accountType) => {
+    if (!user || !user.account_types) return false;
+    return user.account_types.includes(accountType);
+  };
+
+  // Helper function to get user's primary account type
+  const getPrimaryUserAccountType = () => {
+    if (!user || !user.account_types) return null;
+    return getPrimaryAccountType(user.account_types);
+  };
+
+  // Helper function to check if user can access admin features
+  const isAdmin = () => {
+    return hasAccountType('admin');
+  };
+
+  // Helper function to check if user is a freelancer
+  const isFreelancer = () => {
+    return hasAccountType('freelancer');
+  };
+
+  // Helper function to check if user is a client
+  const isClient = () => {
+    return hasAccountType('client');
+  };
+
   const value = {
     user,
     loading,
@@ -241,6 +354,12 @@ export const AuthProvider = ({ children }) => {
     clearError,
     refreshUserData,
     api, // Export the configured axios instance
+    // Helper functions for account type checking
+    hasAccountType,
+    getPrimaryUserAccountType,
+    isAdmin,
+    isFreelancer,
+    isClient,
   };
 
   return (

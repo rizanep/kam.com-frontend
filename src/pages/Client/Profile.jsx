@@ -5,7 +5,8 @@ import {
   TagIcon, LinkIcon, AwardIcon, ExternalLinkIcon, CalendarIcon,
   GlobeIcon, TrendingUpIcon, UsersIcon, CheckCircleIcon,
   AlertCircleIcon, LanguagesIcon, LockIcon, EyeIcon, EyeOffIcon,
-  ShieldIcon, VerifiedIcon, SendIcon, KeyIcon, Settings
+  ShieldIcon, VerifiedIcon, SendIcon, KeyIcon, Settings, SwitchCameraIcon,
+  UserPlusIcon, UserMinusIcon
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 const API_BASE_URL = 'http://localhost:8000/api/auth';
@@ -18,6 +19,11 @@ const UserProfile = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+
+  // Profile type management
+  const [activeProfileType, setActiveProfileType] = useState('basic');
+  const [availableAccountTypes, setAvailableAccountTypes] = useState([]);
+  const [showAccountTypeModal, setShowAccountTypeModal] = useState(false);
 
   // Profile visibility state
   const [profileVisibility, setProfileVisibility] = useState({
@@ -129,22 +135,89 @@ const UserProfile = () => {
       setLoading(true);
       const data = await apiCall('/users/profile/');
       setUser(data);
+      
+      // Extract account types
+      const accountTypes = data.account_types || [];
+      setAvailableAccountTypes(accountTypes);
+      
+      // Set initial active profile type
+      if (accountTypes.includes('freelancer')) {
+        setActiveProfileType('freelancer');
+      } else if (accountTypes.includes('client')) {
+        setActiveProfileType('client');
+      } else {
+        setActiveProfileType('basic');
+      }
+
+      // Set nested data
       setEducation(data.education || []);
       setExperience(data.experience || []);
       setCertifications(data.certifications || []);
       setPortfolio(data.portfolio || []);
       setSocialLinks(data.social_links || []);
       
-      if (data.privacy_settings) {
-        setProfileVisibility(data.privacy_settings);
+      // Set preferences
+      if (data.preferences?.privacy_settings) {
+        setProfileVisibility(data.preferences.privacy_settings);
       }
       
-      setEmailVerification(prev => ({ ...prev, verified: data.email_verified }));
+      setEmailVerification(prev => ({ ...prev, verified: data.is_verified }));
       setPhoneVerification(prev => ({ ...prev, verified: data.phone_verified }));
     } catch (err) {
       setError('Failed to load profile data: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Account type management
+  const addAccountType = async (accountType) => {
+    try {
+      setSaving(true);
+      await apiCall('/account-type/manage/', 'POST', {
+        account_type: accountType,
+        action: 'add'
+      });
+      setSuccess(`${accountType} profile added successfully!`);
+      setTimeout(() => setSuccess(''), 3000);
+      setShowAccountTypeModal(false);
+      fetchUserProfile(); // Refresh data
+    } catch (err) {
+      setError('Failed to add account type: ' + err.message);
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeAccountType = async (accountType) => {
+    if (availableAccountTypes.length === 1) {
+      setError('Cannot remove the last account type');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await apiCall('/account-type/manage/', 'POST', {
+        account_type: accountType,
+        action: 'remove'
+      });
+      setSuccess(`${accountType} profile removed successfully!`);
+      setTimeout(() => setSuccess(''), 3000);
+      
+      // Switch to a different profile type if current one was removed
+      if (activeProfileType === accountType) {
+        const remainingTypes = availableAccountTypes.filter(type => type !== accountType);
+        setActiveProfileType(remainingTypes[0] || 'basic');
+      }
+      
+      fetchUserProfile(); // Refresh data
+    } catch (err) {
+      setError('Failed to remove account type: ' + err.message);
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -155,6 +228,7 @@ const UserProfile = () => {
       await apiCall('/verify-email/send/', 'POST');
       setEmailVerification(prev => ({ ...prev, sent: true, loading: false }));
       setSuccess('Verification email sent! Check your inbox.');
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('Failed to send verification email: ' + err.message);
       setEmailVerification(prev => ({ ...prev, loading: false }));
@@ -167,6 +241,7 @@ const UserProfile = () => {
       await apiCall('/verify-email/', 'POST', { code: emailVerification.code });
       setEmailVerification(prev => ({ ...prev, verified: true, loading: false }));
       setSuccess('Email verified successfully!');
+      setTimeout(() => setSuccess(''), 3000);
       setShowEmailVerificationModal(false);
       fetchUserProfile();
     } catch (err) {
@@ -182,8 +257,10 @@ const UserProfile = () => {
       await apiCall('/verify-phone/send/', 'POST');
       setPhoneVerification(prev => ({ ...prev, sent: true, loading: false }));
       setSuccess('Verification code sent to your phone!');
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('Failed to send verification code: ' + err.message);
+      setTimeout(() => setError(''), 3000);
       setPhoneVerification(prev => ({ ...prev, loading: false }));
     }
   };
@@ -194,10 +271,12 @@ const UserProfile = () => {
       await apiCall('/verify-phone/', 'POST', { code: phoneVerification.code });
       setPhoneVerification(prev => ({ ...prev, verified: true, loading: false }));
       setSuccess('Phone number verified successfully!');
+      setTimeout(() => setSuccess(''), 3000);
       setShowPhoneVerificationModal(false);
       fetchUserProfile();
     } catch (err) {
       setError('Invalid verification code: ' + err.message);
+      setTimeout(() => setError(''), 3000);
       setPhoneVerification(prev => ({ ...prev, loading: false }));
     }
   };
@@ -206,27 +285,26 @@ const UserProfile = () => {
   const handlePasswordChange = async () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       setError('New passwords do not match');
+      setTimeout(() => setError(''), 3000);
       return;
     }
 
     if (passwordData.newPassword.length < 8) {
       setError('Password must be at least 8 characters long');
+      setTimeout(() => setError(''), 3000);
       return;
     }
 
     try {
       setSaving(true);
-      const endpoint = passwordData.verificationMethod === 'email' 
-        ? '/change-password/email/'
-        : '/change-password/otp/';
-      
-      await apiCall(endpoint, 'POST', {
+      await apiCall('/change-password/', 'POST', {
         old_password: passwordData.currentPassword,
         new_password: passwordData.newPassword,
-        verification_method: passwordData.verificationMethod
+        confirm_password: passwordData.confirmPassword
       });
       
-      setSuccess('Password change request sent! Check your email for verification.');
+      setSuccess('Password changed successfully!');
+      setTimeout(() => setSuccess(''), 3000);
       setShowPasswordModal(false);
       setPasswordData({
         currentPassword: '',
@@ -236,6 +314,7 @@ const UserProfile = () => {
       });
     } catch (err) {
       setError('Failed to change password: ' + err.message);
+      setTimeout(() => setError(''), 3000);
     } finally {
       setSaving(false);
     }
@@ -245,11 +324,17 @@ const UserProfile = () => {
   const updatePrivacySettings = async () => {
     try {
       setSaving(true);
-      await apiCall('/privacy-settings/', 'PATCH', profileVisibility);
+      await apiCall('/profile/update/', 'PATCH', {
+        preferences: {
+          privacy_settings: profileVisibility
+        }
+      });
       setSuccess('Privacy settings updated successfully!');
+      setTimeout(() => setSuccess(''), 3000);
       setShowPrivacyModal(false);
     } catch (err) {
       setError('Failed to update privacy settings: ' + err.message);
+      setTimeout(() => setError(''), 3000);
     } finally {
       setSaving(false);
     }
@@ -290,6 +375,7 @@ const UserProfile = () => {
       setEditingItem(null);
     } catch (err) {
       setError('Failed to save education: ' + err.message);
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -299,6 +385,7 @@ const UserProfile = () => {
       setEducation(prev => prev.filter(edu => edu.id !== id));
     } catch (err) {
       setError('Failed to delete education: ' + err.message);
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -315,6 +402,7 @@ const UserProfile = () => {
       setEditingItem(null);
     } catch (err) {
       setError('Failed to save experience: ' + err.message);
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -324,6 +412,7 @@ const UserProfile = () => {
       setExperience(prev => prev.filter(exp => exp.id !== id));
     } catch (err) {
       setError('Failed to delete experience: ' + err.message);
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -340,6 +429,7 @@ const UserProfile = () => {
       setEditingItem(null);
     } catch (err) {
       setError('Failed to save certification: ' + err.message);
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -349,6 +439,7 @@ const UserProfile = () => {
       setCertifications(prev => prev.filter(cert => cert.id !== id));
     } catch (err) {
       setError('Failed to delete certification: ' + err.message);
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -365,6 +456,7 @@ const UserProfile = () => {
       setEditingItem(null);
     } catch (err) {
       setError('Failed to save portfolio item: ' + err.message);
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -374,58 +466,98 @@ const UserProfile = () => {
       setPortfolio(prev => prev.filter(item => item.id !== id));
     } catch (err) {
       setError('Failed to delete portfolio item: ' + err.message);
+      setTimeout(() => setError(''), 3000);
     }
   };
 
-  // Handle input changes for basic profile info
-  const handleInputChange = (field, value) => {
+  // Handle input changes for nested profiles
+  const handleNestedInputChange = (profileType, field, value) => {
+    setUser(prev => ({
+      ...prev,
+      [profileType]: {
+        ...prev[profileType],
+        [field]: value
+      }
+    }));
+  };
+
+  const handleBasicInputChange = (field, value) => {
     setUser(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleArrayAdd = (field, value) => {
-    if (value.trim() && !user[field]?.includes(value)) {
+  const handleArrayAdd = (profileType, field, value) => {
+    if (value.trim() && !user[profileType]?.[field]?.includes(value)) {
       setUser(prev => ({ 
         ...prev, 
-        [field]: [...(prev[field] || []), value] 
+        [profileType]: {
+          ...prev[profileType],
+          [field]: [...(prev[profileType]?.[field] || []), value] 
+        }
       }));
     }
   };
 
-  const handleArrayRemove = (field, index) => {
+  const handleArrayRemove = (profileType, field, index) => {
     setUser(prev => ({ 
       ...prev, 
-      [field]: prev[field].filter((_, i) => i !== index) 
+      [profileType]: {
+        ...prev[profileType],
+        [field]: prev[profileType]?.[field]?.filter((_, i) => i !== index) || []
+      }
     }));
   };
 
-  // Handle save for basic profile info
+  // Handle save for profile data
   const handleSave = async () => {
     setSaving(true);
     setError('');
     setSuccess('');
 
     try {
-      const updateData = { ...user };
+      const updateData = {};
       
-      // Remove read-only fields
-      delete updateData.id;
-      delete updateData.average_rating;
-      delete updateData.total_reviews;
-      delete updateData.total_projects_completed;
-      delete updateData.total_projects_posted;
-      delete updateData.total_spent;
-      delete updateData.profile_completion_percentage;
-      delete updateData.last_activity;
-      delete updateData.created_at;
-      delete updateData.updated_at;
-      delete updateData.groups;
-      delete updateData.education;
-      delete updateData.experience;
-      delete updateData.certifications;
-      delete updateData.portfolio;
-      delete updateData.social_links;
-      delete updateData.full_name;
-      delete updateData.profile_picture;
+      // Basic user fields
+      updateData.first_name = user.first_name;
+      updateData.last_name = user.last_name;
+      updateData.phone_number = user.phone_number;
+      updateData.bio = user.bio;
+      updateData.country = user.country;
+      updateData.city = user.city;
+      updateData.timezone = user.timezone;
+
+      // Professional profile
+      if (user.professional_profile) {
+        updateData.professional_profile = {
+          title: user.professional_profile.title,
+          company_name: user.professional_profile.company_name,
+          website: user.professional_profile.website,
+          linkedin_url: user.professional_profile.linkedin_url,
+          github_url: user.professional_profile.github_url,
+          portfolio_url: user.professional_profile.portfolio_url,
+          languages_spoken: user.professional_profile.languages_spoken
+        };
+      }
+
+      // Freelancer profile
+      if (user.freelancer_profile && availableAccountTypes.includes('freelancer')) {
+        updateData.freelancer_profile = {
+          skills: user.freelancer_profile.skills,
+          experience_level: user.freelancer_profile.experience_level,
+          years_of_experience: user.freelancer_profile.years_of_experience,
+          hourly_rate: user.freelancer_profile.hourly_rate,
+          currency: user.freelancer_profile.currency,
+          availability_status: user.freelancer_profile.availability_status,
+          availability_hours_per_week: user.freelancer_profile.availability_hours_per_week
+        };
+      }
+
+      // Client profile
+      if (user.client_profile && availableAccountTypes.includes('client')) {
+        updateData.client_profile = {
+          company_size: user.client_profile.company_size,
+          industry: user.client_profile.industry
+        };
+      }
 
       const updatedUser = await apiCall('/profile/update/', 'PATCH', updateData);
       setUser(updatedUser);
@@ -440,14 +572,188 @@ const UserProfile = () => {
     }
   };
 
+  // Profile Type Switcher Component
+  const ProfileTypeSwitcher = () => (
+    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <h3 className="text-lg font-medium text-gray-900">Profile Type</h3>
+          
+          {/* Profile Type Buttons */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setActiveProfileType('basic')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeProfileType === 'basic'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <UserIcon className="h-4 w-4 inline mr-1" />
+              Basic
+            </button>
+            
+            {availableAccountTypes.includes('freelancer') && (
+              <button
+                onClick={() => setActiveProfileType('freelancer')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeProfileType === 'freelancer'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <BriefcaseIcon className="h-4 w-4 inline mr-1" />
+                Freelancer
+              </button>
+            )}
+            
+            {availableAccountTypes.includes('client') && (
+              <button
+                onClick={() => setActiveProfileType('client')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeProfileType === 'client'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <BuildingIcon className="h-4 w-4 inline mr-1" />
+                Client
+              </button>
+            )}
+            
+            {availableAccountTypes.includes('admin') && (
+              <button
+                onClick={() => setActiveProfileType('admin')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeProfileType === 'admin'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <ShieldIcon className="h-4 w-4 inline mr-1" />
+                Admin
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Manage Account Types */}
+        <button
+          onClick={() => setShowAccountTypeModal(true)}
+          className="flex items-center px-3 py-2 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700"
+        >
+          <SwitchCameraIcon className="h-4 w-4 mr-1" />
+          Manage Profiles
+        </button>
+      </div>
+
+      {/* Active Account Types Display */}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {availableAccountTypes.filter(type => type !== "admin").map(type => (
+          <span
+            key={type}
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
+          >
+            {type.charAt(0).toUpperCase() + type.slice(1)}
+            {availableAccountTypes.length > 1 && (
+              <button
+                onClick={() => removeAccountType(type)}
+                className="ml-2 text-blue-600 hover:text-blue-800"
+              >
+                <XIcon className="h-3 w-3" />
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Account Type Management Modal
+  const AccountTypeModal = () => {
+    if (!showAccountTypeModal) return null;
+
+    const allAccountTypes = ['freelancer', 'client'];
+    const availableToAdd = allAccountTypes.filter(type => !availableAccountTypes.includes(type));
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <h3 className="text-lg font-medium mb-4 flex items-center">
+            <SwitchCameraIcon className="h-5 w-5 mr-2" />
+            Manage Profile Types
+          </h3>
+          
+          <div className="space-y-4">
+            {/* Current Account Types */}
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">Current Profiles:</h4>
+              <div className="space-y-2">
+                {availableAccountTypes.map(type => (
+                  <div key={type} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      {type === 'freelancer' && <BriefcaseIcon className="h-4 w-4 text-blue-600" />}
+                      {type === 'client' && <BuildingIcon className="h-4 w-4 text-green-600" />}
+                      {type === 'admin' && <ShieldIcon className="h-4 w-4 text-purple-600" />}
+                      <span className="font-medium text-gray-900 capitalize">{type}</span>
+                    </div>
+                    {availableAccountTypes.length > 1 && (
+                      <button
+                        onClick={() => removeAccountType(type)}
+                        className="text-red-600 hover:text-red-800"
+                        disabled={saving}
+                      >
+                        <UserMinusIcon className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Available to Add */}
+            {availableToAdd.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-900 mb-2">Add Profile Type:</h4>
+                <div className="space-y-2">
+                  {availableToAdd.map(type => (
+                    <button
+                      key={type}
+                      onClick={() => addAccountType(type)}
+                      disabled={saving}
+                      className="w-full flex items-center space-x-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {type === 'freelancer' && <BriefcaseIcon className="h-4 w-4 text-blue-600" />}
+                      {type === 'client' && <BuildingIcon className="h-4 w-4 text-green-600" />}
+                      {type === 'admin' && <ShieldIcon className="h-4 w-4 text-purple-600" />}
+                      <span className="font-medium text-gray-900 capitalize">{type}</span>
+                      <UserPlusIcon className="h-4 w-4 ml-auto text-gray-400" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <button
+              onClick={() => setShowAccountTypeModal(false)}
+              className="w-full bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Skill Input Component
-  const SkillInput = ({ onAdd }) => {
+  const SkillInput = ({ profileType, field, onAdd }) => {
     const [skillInput, setSkillInput] = useState('');
 
     const handleSubmit = (e) => {
       e.preventDefault();
       if (skillInput.trim()) {
-        onAdd(skillInput.trim());
+        onAdd(profileType, field, skillInput.trim());
         setSkillInput('');
       }
     };
@@ -459,7 +765,7 @@ const UserProfile = () => {
           value={skillInput}
           onChange={(e) => setSkillInput(e.target.value)}
           className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Add a skill..."
+          placeholder="Add item..."
         />
         <button
           type="submit"
@@ -493,7 +799,7 @@ const UserProfile = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-gray-900">Change Password</p>
-                <p className="text-sm text-gray-500">Update your account password with email verification</p>
+                <p className="text-sm text-gray-500">Update your account password</p>
               </div>
               <KeyIcon className="h-5 w-5 text-gray-400" />
             </div>
@@ -507,7 +813,6 @@ const UserProfile = () => {
             Account Verification
           </h4>
           
-          {/* Email Verification */}
           <div className="p-4 border border-gray-200 rounded-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -518,8 +823,14 @@ const UserProfile = () => {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                {emailVerification.verified ? (
-                  <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                {user?.is_verified ? (
+                  <button
+                    disabled
+                    className="px-3 py-1 text-sm bg-green-100 text-green-600 rounded-md cursor-not-allowed flex items-center"
+                  >
+                    <CheckCircleIcon className="h-4 w-4 mr-1" />
+                    Verified
+                  </button>
                 ) : (
                   <button
                     onClick={() => setShowEmailVerificationModal(true)}
@@ -543,7 +854,7 @@ const UserProfile = () => {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                {phoneVerification.verified ? (
+                {user?.phone_verified ? (
                   <CheckCircleIcon className="h-5 w-5 text-green-500" />
                 ) : (
                   <button
@@ -624,6 +935,7 @@ const UserProfile = () => {
                   onClick={() => {
                     navigator.clipboard.writeText(`${window.location.origin}/profile/${user?.id}`);
                     setSuccess('Profile URL copied to clipboard!');
+                    setTimeout(() => setSuccess(''), 3000);
                   }}
                   className="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
                 >
@@ -743,33 +1055,6 @@ const UserProfile = () => {
                 >
                   {showPasswords.confirm ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
                 </button>
-              </div>
-            </div>
-
-            {/* Verification Method */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Verification Method</label>
-              <div className="space-y-2">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    value="email"
-                    checked={passwordData.verificationMethod === 'email'}
-                    onChange={(e) => setPasswordData(prev => ({ ...prev, verificationMethod: e.target.value }))}
-                    className="mr-2"
-                  />
-                  <span className="text-sm">Email verification</span>
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    value="otp"
-                    checked={passwordData.verificationMethod === 'otp'}
-                    onChange={(e) => setPasswordData(prev => ({ ...prev, verificationMethod: e.target.value }))}
-                    className="mr-2"
-                  />
-                  <span className="text-sm">SMS OTP</span>
-                </label>
               </div>
             </div>
 
@@ -1558,7 +1843,7 @@ const UserProfile = () => {
                     {user.full_name}
                   </h1>
                   <div className="flex items-center space-x-2">
-                    {user.email_verified && (
+                    {user.is_verified && (
                       <CheckCircleIcon className="h-5 w-5 text-green-500" title="Email verified" />
                     )}
                     {user.phone_verified && (
@@ -1569,21 +1854,23 @@ const UserProfile = () => {
                     )}
                   </div>
                 </div>
-                <p className="text-lg text-gray-600">{user.title}</p>
+                <p className="text-lg text-gray-600">
+                  {user.professional_profile?.title || 'No title set'}
+                </p>
                 <div className="flex items-center space-x-4 mt-2">
                   <div className="flex items-center text-gray-500">
                     <MapPinIcon className="h-4 w-4 mr-1" />
                     <span>{user.city}, {user.country}</span>
                   </div>
-                  {user.user_type === 'freelancer' && (
+                  {user.freelancer_profile && (
                     <div className="flex items-center text-gray-500">
                       <ClockIcon className="h-4 w-4 mr-1" />
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        user.availability_status === 'available' ? 'bg-green-100 text-green-800' :
-                        user.availability_status === 'busy' ? 'bg-yellow-100 text-yellow-800' :
+                        user.freelancer_profile.availability_status === 'available' ? 'bg-green-100 text-green-800' :
+                        user.freelancer_profile.availability_status === 'busy' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-red-100 text-red-800'
                       }`}>
-                        {user.availability_status}
+                        {user.freelancer_profile.availability_status}
                       </span>
                     </div>
                   )}
@@ -1640,611 +1927,780 @@ const UserProfile = () => {
           </div>
         )}
 
+        {/* Profile Type Switcher */}
+        <ProfileTypeSwitcher />
+
         {/* Security Section */}
         <SecuritySection />
 
         {/* Public Profile Section */}
         <PublicProfileSection />
 
-        {/* Basic Information */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
-              <input
-                type="text"
-                value={user.first_name || ''}
-                onChange={(e) => handleInputChange('first_name', e.target.value)}
-                disabled={!isEditing}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
-              <input
-                type="text"
-                value={user.last_name || ''}
-                onChange={(e) => handleInputChange('last_name', e.target.value)}
-                disabled={!isEditing}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <MailIcon className="h-4 w-4 inline mr-1" />
-                Email
-              </label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="email"
-                  value={user.email || ''}
-                  disabled={true}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
-                />
-                {user.email_verified ? (
-                  <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                ) : (
-                  <button
-                    onClick={() => setShowEmailVerificationModal(true)}
-                    className="px-3 py-1 text-sm bg-yellow-600 text-white rounded-md hover:bg-yellow-700"
-                  >
-                    Verify
-                  </button>
-                )}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <PhoneIcon className="h-4 w-4 inline mr-1" />
-                Phone Number
-              </label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="tel"
-                  value={user.phone_number || ''}
-                  onChange={(e) => handleInputChange('phone_number', e.target.value)}
-                  disabled={!isEditing}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                />
-                {user.phone_verified ? (
-                  <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                ) : user.phone_number ? (
-                  <button
-                    onClick={() => setShowPhoneVerificationModal(true)}
-                    className="px-3 py-1 text-sm bg-yellow-600 text-white rounded-md hover:bg-yellow-700"
-                  >
-                    Verify
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
-              <input
-                type="text"
-                value={user.country || ''}
-                onChange={(e) => handleInputChange('country', e.target.value)}
-                disabled={!isEditing}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-              <input
-                type="text"
-                value={user.city || ''}
-                onChange={(e) => handleInputChange('city', e.target.value)}
-                disabled={!isEditing}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
-              <textarea
-                value={user.bio || ''}
-                onChange={(e) => handleInputChange('bio', e.target.value)}
-                disabled={!isEditing}
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                placeholder="Tell us about yourself..."
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Professional/Company Information */}
-        {(user.user_type === 'freelancer' || user.user_type === 'client') && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              {user.user_type === 'freelancer' ? 'Professional Information' : 'Company Information'}
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {user.user_type === 'freelancer' ? (
-                // Freelancer fields
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+        {/* Profile Content Based on Active Type */}
+        {activeProfileType === 'basic' && (
+          <>
+            {/* Basic Information */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+                  <input
+                    type="text"
+                    value={user.first_name || ''}
+                    onChange={(e) => handleBasicInputChange('first_name', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+                  <input
+                    type="text"
+                    value={user.last_name || ''}
+                    onChange={(e) => handleBasicInputChange('last_name', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <MailIcon className="h-4 w-4 inline mr-1" />
+                    Email
+                  </label>
+                  <div className="flex items-center space-x-2">
                     <input
-                      type="text"
-                      value={user.title || ''}
-                      onChange={(e) => handleInputChange('title', e.target.value)}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                      placeholder="e.g. Senior Full Stack Developer"
+                      type="email"
+                      value={user.email || ''}
+                      disabled={true}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
                     />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <DollarSignIcon className="h-4 w-4 inline mr-1" />
-                      Hourly Rate ({user.currency})
-                    </label>
-                    <input
-                      type="number"
-                      value={user.hourly_rate || ''}
-                      onChange={(e) => handleInputChange('hourly_rate', parseFloat(e.target.value))}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                      placeholder="75"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Experience Level</label>
-                    <select
-                      value={user.experience_level || ''}
-                      onChange={(e) => handleInputChange('experience_level', e.target.value)}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                    >
-                      <option value="">Select Level</option>
-                      <option value="entry">Entry Level</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="expert">Expert</option>
-                      <option value="senior">Senior</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Years of Experience</label>
-                    <input
-                      type="number"
-                      value={user.years_of_experience || ''}
-                      onChange={(e) => handleInputChange('years_of_experience', parseInt(e.target.value))}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                      placeholder="5"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Availability Status</label>
-                    <select
-                      value={user.availability_status || ''}
-                      onChange={(e) => handleInputChange('availability_status', e.target.value)}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                    >
-                      <option value="available">Available</option>
-                      <option value="busy">Busy</option>
-                      <option value="unavailable">Unavailable</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Hours per Week</label>
-                    <input
-                      type="number"
-                      value={user.availability_hours_per_week || ''}
-                      onChange={(e) => handleInputChange('availability_hours_per_week', parseInt(e.target.value))}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                      placeholder="40"
-                    />
-                  </div>
-                </>
-              ) : (
-                // Client fields
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <BuildingIcon className="h-4 w-4 inline mr-1" />
-                      Company Name
-                    </label>
-                    <input
-                      type="text"
-                      value={user.company_name || ''}
-                      onChange={(e) => handleInputChange('company_name', e.target.value)}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                      placeholder="Your Company Name"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <GlobeIcon className="h-4 w-4 inline mr-1" />
-                      Website
-                    </label>
-                    <input
-                      type="url"
-                      value={user.website || ''}
-                      onChange={(e) => handleInputChange('website', e.target.value)}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                      placeholder="https://yourcompany.com"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Industry</label>
-                    <select
-                      value={user.industry || ''}
-                      onChange={(e) => handleInputChange('industry', e.target.value)}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                    >
-                      <option value="">Select Industry</option>
-                      <option value="Technology">Technology</option>
-                      <option value="Healthcare">Healthcare</option>
-                      <option value="Finance">Finance</option>
-                      <option value="Education">Education</option>
-                      <option value="Retail">Retail</option>
-                      <option value="Manufacturing">Manufacturing</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Company Size</label>
-                    <select
-                      value={user.company_size || ''}
-                      onChange={(e) => handleInputChange('company_size', e.target.value)}
-                      disabled={!isEditing}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
-                    >
-                      <option value="">Select Size</option>
-                      <option value="startup">Startup (1-10)</option>
-                      <option value="small">Small (11-50)</option>
-                      <option value="medium">Medium (51-200)</option>
-                      <option value="large">Large (200+)</option>
-                    </select>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Skills Section - Only for Freelancers */}
-        {user.user_type === 'freelancer' && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              <TagIcon className="h-5 w-5 inline mr-2" />
-              Skills
-            </h3>
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {(user.skills || []).map((skill, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
-                  >
-                    {skill}
-                    {isEditing && (
+                    {user.is_verified ? (
+                      <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                    ) : (
                       <button
-                        onClick={() => handleArrayRemove('skills', index)}
-                        className="ml-2 text-blue-600 hover:text-blue-800"
+                        onClick={() => setShowEmailVerificationModal(true)}
+                        className="px-3 py-1 text-sm bg-yellow-600 text-white rounded-md hover:bg-yellow-700"
                       >
-                        <XIcon className="h-3 w-3" />
+                        Verify
                       </button>
                     )}
-                  </span>
-                ))}
-              </div>
-              {isEditing && (
-                <SkillInput onAdd={(skill) => handleArrayAdd('skills', skill)} />
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Languages Section */}
-        {user.user_type === 'freelancer' && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            <LanguagesIcon className="h-5 w-5 inline mr-2" />
-            Languages
-          </h3>
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {(user.languages_spoken || []).map((language, index) => (
-                <span
-                  key={index}
-                  className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800"
-                >
-                  {language}
-                  {isEditing && (
-                    <button
-                      onClick={() => handleArrayRemove('languages_spoken', index)}
-                      className="ml-2 text-green-600 hover:text-green-800"
-                    >
-                      <XIcon className="h-3 w-3" />
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
-            {isEditing && (
-              <SkillInput onAdd={(language) => handleArrayAdd('languages_spoken', language)} />
-            )}
-          </div>
-        </div>
-        )}
-
-        {/* Portfolio Section */}
-                {user.user_type === 'freelancer' && (
-
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Portfolio</h3>
-            {isEditing && (
-              <button
-                onClick={() => openPortfolioModal()}
-                className="flex items-center text-blue-600 hover:text-blue-800"
-              >
-                <PlusIcon className="h-4 w-4 mr-1" />
-                Add Portfolio Item
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {portfolio.map((item) => (
-              <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-                {item.image && (
-                  <img
-                    src={item.image}
-                    alt={item.title}
-                    className="w-full h-40 object-cover rounded-md mb-3"
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <PhoneIcon className="h-4 w-4 inline mr-1" />
+                    Phone Number
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="tel"
+                      value={user.phone_number || ''}
+                      onChange={(e) => handleBasicInputChange('phone_number', e.target.value)}
+                      disabled={!isEditing}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    />
+                    {user.phone_verified ? (
+                      <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                    ) : user.phone_number ? (
+                      <button
+                        onClick={() => setShowPhoneVerificationModal(true)}
+                        className="px-3 py-1 text-sm bg-yellow-600 text-white rounded-md hover:bg-yellow-700"
+                      >
+                        Verify
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
+                  <input
+                    type="text"
+                    value={user.country || ''}
+                    onChange={(e) => handleBasicInputChange('country', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
                   />
-                )}
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="font-medium text-gray-900">{item.title}</h4>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+                  <input
+                    type="text"
+                    value={user.city || ''}
+                    onChange={(e) => handleBasicInputChange('city', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
+                  <textarea
+                    value={user.bio || ''}
+                    onChange={(e) => handleBasicInputChange('bio', e.target.value)}
+                    disabled={!isEditing}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="Tell us about yourself..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Professional Information */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Professional Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                  <input
+                    type="text"
+                    value={user.professional_profile?.title || ''}
+                    onChange={(e) => handleNestedInputChange('professional_profile', 'title', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="e.g. Senior Full Stack Developer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
+                  <input
+                    type="text"
+                    value={user.professional_profile?.company_name || ''}
+                    onChange={(e) => handleNestedInputChange('professional_profile', 'company_name', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="Your Company Name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
+                  <input
+                    type="url"
+                    value={user.professional_profile?.website || ''}
+                    onChange={(e) => handleNestedInputChange('professional_profile', 'website', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="https://yourwebsite.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">LinkedIn URL</label>
+                  <input
+                    type="url"
+                    value={user.professional_profile?.linkedin_url || ''}
+                    onChange={(e) => handleNestedInputChange('professional_profile', 'linkedin_url', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="https://linkedin.com/in/yourprofile"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">GitHub URL</label>
+                  <input
+                    type="url"
+                    value={user.professional_profile?.github_url || ''}
+                    onChange={(e) => handleNestedInputChange('professional_profile', 'github_url', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="https://github.com/yourusername"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Portfolio URL</label>
+                  <input
+                    type="url"
+                    value={user.professional_profile?.portfolio_url || ''}
+                    onChange={(e) => handleNestedInputChange('professional_profile', 'portfolio_url', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="https://yourportfolio.com"
+                  />
+                </div>
+              </div>
+
+              {/* Languages Section */}
+              <div className="mt-6">
+                <h4 className="text-md font-medium text-gray-900 mb-4">
+                  <LanguagesIcon className="h-5 w-5 inline mr-2" />
+                  Languages Spoken
+                </h4>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    {(user.professional_profile?.languages_spoken || []).map((language, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800"
+                      >
+                        {language}
+                        {isEditing && (
+                          <button
+                            onClick={() => handleArrayRemove('professional_profile', 'languages_spoken', index)}
+                            className="ml-2 text-green-600 hover:text-green-800"
+                          >
+                            <XIcon className="h-3 w-3" />
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
                   {isEditing && (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => openPortfolioModal(item)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <EditIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => deletePortfolio(item.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <XIcon className="h-4 w-4" />
-                      </button>
-                    </div>
+                    <SkillInput 
+                      profileType="professional_profile" 
+                      field="languages_spoken" 
+                      onAdd={handleArrayAdd} 
+                    />
                   )}
                 </div>
-                <p className="text-gray-600 text-sm mt-2">{item.description}</p>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {item.technologies_used?.map((tech, idx) => (
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Freelancer Profile Content */}
+        {activeProfileType === 'freelancer' && availableAccountTypes.includes('freelancer') && (
+          <>
+            {/* Freelancer Information */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                <BriefcaseIcon className="h-5 w-5 inline mr-2" />
+                Freelancer Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Experience Level</label>
+                  <select
+                    value={user.freelancer_profile?.experience_level || ''}
+                    onChange={(e) => handleNestedInputChange('freelancer_profile', 'experience_level', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  >
+                    <option value="">Select Level</option>
+                    <option value="entry">Entry Level</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="expert">Expert</option>
+                    <option value="senior">Senior</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Years of Experience</label>
+                  <input
+                    type="number"
+                    value={user.freelancer_profile?.years_of_experience || ''}
+                    onChange={(e) => handleNestedInputChange('freelancer_profile', 'years_of_experience', parseInt(e.target.value))}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="5"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <DollarSignIcon className="h-4 w-4 inline mr-1" />
+                    Hourly Rate ({user.freelancer_profile?.currency || 'USD'})
+                  </label>
+                  <input
+                    type="number"
+                    value={user.freelancer_profile?.hourly_rate || ''}
+                    onChange={(e) => handleNestedInputChange('freelancer_profile', 'hourly_rate', parseFloat(e.target.value))}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="75"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
+                  <select
+                    value={user.freelancer_profile?.currency || 'USD'}
+                    onChange={(e) => handleNestedInputChange('freelancer_profile', 'currency', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="CAD">CAD</option>
+                    <option value="AUD">AUD</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Availability Status</label>
+                  <select
+                    value={user.freelancer_profile?.availability_status || 'available'}
+                    onChange={(e) => handleNestedInputChange('freelancer_profile', 'availability_status', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  >
+                    <option value="available">Available</option>
+                    <option value="busy">Busy</option>
+                    <option value="unavailable">Unavailable</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Hours per Week</label>
+                  <input
+                    type="number"
+                    value={user.freelancer_profile?.availability_hours_per_week || ''}
+                    onChange={(e) => handleNestedInputChange('freelancer_profile', 'availability_hours_per_week', parseInt(e.target.value))}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="40"
+                  />
+                </div>
+              </div>
+
+              {/* Freelancer Stats */}
+              {user.freelancer_profile && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <h4 className="text-md font-medium text-gray-900 mb-4">Performance Stats</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center mb-2">
+                        <StarIcon className="h-5 w-5 text-yellow-400 mr-1" />
+                        <span className="text-2xl font-bold text-gray-900">
+                          {user.freelancer_profile.average_rating}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500">Average Rating</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-900 mb-2">
+                        {user.freelancer_profile.total_reviews}
+                      </div>
+                      <p className="text-sm text-gray-500">Total Reviews</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-900 mb-2">
+                        {user.freelancer_profile.total_projects_completed}
+                      </div>
+                      <p className="text-sm text-gray-500">Projects Completed</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Skills Section */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                <TagIcon className="h-5 w-5 inline mr-2" />
+                Skills
+              </h3>
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {(user.freelancer_profile?.skills || []).map((skill, index) => (
                     <span
-                      key={idx}
-                      className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded"
+                      key={index}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
                     >
-                      {tech}
+                      {skill}
+                      {isEditing && (
+                        <button
+                          onClick={() => handleArrayRemove('freelancer_profile', 'skills', index)}
+                          className="ml-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <XIcon className="h-3 w-3" />
+                        </button>
+                      )}
                     </span>
                   ))}
                 </div>
-                {item.url && (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center text-blue-600 hover:text-blue-800 text-sm mt-2"
+                {isEditing && (
+                  <SkillInput 
+                    profileType="freelancer_profile" 
+                    field="skills" 
+                    onAdd={handleArrayAdd} 
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Portfolio Section */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Portfolio</h3>
+                {isEditing && (
+                  <button
+                    onClick={() => openPortfolioModal()}
+                    className="flex items-center text-blue-600 hover:text-blue-800"
                   >
-                    <ExternalLinkIcon className="h-3 w-3 mr-1" />
-                    View Project
-                  </a>
+                    <PlusIcon className="h-4 w-4 mr-1" />
+                    Add Portfolio Item
+                  </button>
                 )}
               </div>
-            ))}
-          </div>
-        </div>
-                )}
-        {/* Education Section */}
-                {user.user_type === 'freelancer' && (
-
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-gray-900">
-              <GraduationCapIcon className="h-5 w-5 inline mr-2" />
-              Education
-            </h3>
-            {isEditing && (
-              <button
-                onClick={() => openEducationModal()}
-                className="flex items-center text-blue-600 hover:text-blue-800"
-              >
-                <PlusIcon className="h-4 w-4 mr-1" />
-                Add Education
-              </button>
-            )}
-          </div>
-          <div className="space-y-4">
-            {education.map((edu) => (
-              <div key={edu.id} className="border border-gray-200 rounded-md p-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{edu.degree}</h4>
-                    <p className="text-gray-600">{edu.field_of_study}</p>
-                    <p className="text-gray-500 text-sm">{edu.institution}</p>
-                    <p className="text-gray-400 text-xs mt-1">
-                      {edu.start_date} - {edu.end_date || 'Present'}
-                    </p>
-                    {edu.description && (
-                      <p className="text-gray-600 text-sm mt-2">{edu.description}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {portfolio.map((item) => (
+                  <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+                    {item.image && (
+                      <img
+                        src={item.image}
+                        alt={item.title}
+                        className="w-full h-40 object-cover rounded-md mb-3"
+                      />
                     )}
-                  </div>
-                  {isEditing && (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => openEducationModal(edu)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <EditIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => deleteEducation(edu.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <XIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-                )}
-        {/* Experience Section */}
-                {user.user_type === 'freelancer' && (
-
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-gray-900">
-              <BriefcaseIcon className="h-5 w-5 inline mr-2" />
-              Experience
-            </h3>
-            {isEditing && (
-              <button
-                onClick={() => openExperienceModal()}
-                className="flex items-center text-blue-600 hover:text-blue-800"
-              >
-                <PlusIcon className="h-4 w-4 mr-1" />
-                Add Experience
-              </button>
-            )}
-          </div>
-          <div className="space-y-4">
-            {experience.map((exp) => (
-              <div key={exp.id} className="border border-gray-200 rounded-md p-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <h4 className="font-medium text-gray-900">{exp.title}</h4>
-                      {exp.is_current && (
-                        <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
-                          Current
-                        </span>
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-medium text-gray-900">{item.title}</h4>
+                      {isEditing && (
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => openPortfolioModal(item)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <EditIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => deletePortfolio(item.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <XIcon className="h-4 w-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
-                    <p className="text-gray-600">{exp.company}</p>
-                    {exp.location && (
-                      <p className="text-gray-500 text-sm">{exp.location}</p>
-                    )}
-                    <p className="text-gray-400 text-xs mt-1">
-                      {exp.start_date} - {exp.end_date || 'Present'}
-                    </p>
-                    {exp.description && (
-                      <p className="text-gray-600 text-sm mt-2">{exp.description}</p>
-                    )}
-                  </div>
-                  {isEditing && (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => openExperienceModal(exp)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <EditIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => deleteExperience(exp.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <XIcon className="h-4 w-4" />
-                      </button>
+                    <p className="text-gray-600 text-sm mt-2">{item.description}</p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {item.technologies_used?.map((tech, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded"
+                        >
+                          {tech}
+                        </span>
+                      ))}
                     </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        )}
-
-        {/* Certifications Section */}{user.user_type === 'freelancer' && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-gray-900">
-              <AwardIcon className="h-5 w-5 inline mr-2" />
-              Certifications
-            </h3>
-            {isEditing && (
-              <button
-                onClick={() => openCertificationModal()}
-                className="flex items-center text-blue-600 hover:text-blue-800"
-              >
-                <PlusIcon className="h-4 w-4 mr-1" />
-                Add Certification
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {certifications.map((cert) => (
-              <div key={cert.id} className="border border-gray-200 rounded-md p-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{cert.name}</h4>
-                    <p className="text-gray-600 text-sm">{cert.issuing_organization}</p>
-                    <p className="text-gray-400 text-xs mt-1">
-                      Issued: {cert.issue_date}
-                    </p>
-                    {cert.expiry_date && (
-                      <p className="text-gray-400 text-xs">
-                        Expires: {cert.expiry_date}
-                      </p>
-                    )}
-                    {cert.credential_url && (
+                    {item.url && (
                       <a
-                        href={cert.credential_url}
+                        href={item.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center text-blue-600 hover:text-blue-800 text-sm mt-2"
                       >
                         <ExternalLinkIcon className="h-3 w-3 mr-1" />
-                        View Certificate
+                        View Project
                       </a>
                     )}
                   </div>
-                  {isEditing && (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => openCertificationModal(cert)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <EditIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => deleteCertification(cert.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <XIcon className="h-4 w-4" />
-                      </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Education Section */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  <GraduationCapIcon className="h-5 w-5 inline mr-2" />
+                  Education
+                </h3>
+                {isEditing && (
+                  <button
+                    onClick={() => openEducationModal()}
+                    className="flex items-center text-blue-600 hover:text-blue-800"
+                  >
+                    <PlusIcon className="h-4 w-4 mr-1" />
+                    Add Education
+                  </button>
+                )}
+              </div>
+              <div className="space-y-4">
+                {education.map((edu) => (
+                  <div key={edu.id} className="border border-gray-200 rounded-md p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900">{edu.degree}</h4>
+                        <p className="text-gray-600">{edu.field_of_study}</p>
+                        <p className="text-gray-500 text-sm">{edu.institution}</p>
+                        <p className="text-gray-400 text-xs mt-1">
+                          {edu.start_date} - {edu.end_date || 'Present'}
+                        </p>
+                        {edu.description && (
+                          <p className="text-gray-600 text-sm mt-2">{edu.description}</p>
+                        )}
+                      </div>
+                      {isEditing && (
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => openEducationModal(edu)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <EditIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteEducation(edu.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <XIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Experience Section */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  <BriefcaseIcon className="h-5 w-5 inline mr-2" />
+                  Experience
+                </h3>
+                {isEditing && (
+                  <button
+                    onClick={() => openExperienceModal()}
+                    className="flex items-center text-blue-600 hover:text-blue-800"
+                  >
+                    <PlusIcon className="h-4 w-4 mr-1" />
+                    Add Experience
+                  </button>
+                )}
+              </div>
+              <div className="space-y-4">
+                {experience.map((exp) => (
+                  <div key={exp.id} className="border border-gray-200 rounded-md p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2">
+                          <h4 className="font-medium text-gray-900">{exp.title}</h4>
+                          {exp.is_current && (
+                            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
+                              Current
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-600">{exp.company}</p>
+                        {exp.location && (
+                          <p className="text-gray-500 text-sm">{exp.location}</p>
+                        )}
+                        <p className="text-gray-400 text-xs mt-1">
+                          {exp.start_date} - {exp.end_date || 'Present'}
+                        </p>
+                        {exp.description && (
+                          <p className="text-gray-600 text-sm mt-2">{exp.description}</p>
+                        )}
+                      </div>
+                      {isEditing && (
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => openExperienceModal(exp)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <EditIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteExperience(exp.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <XIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Certifications Section */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  <AwardIcon className="h-5 w-5 inline mr-2" />
+                  Certifications
+                </h3>
+                {isEditing && (
+                  <button
+                    onClick={() => openCertificationModal()}
+                    className="flex items-center text-blue-600 hover:text-blue-800"
+                  >
+                    <PlusIcon className="h-4 w-4 mr-1" />
+                    Add Certification
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {certifications.map((cert) => (
+                  <div key={cert.id} className="border border-gray-200 rounded-md p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900">{cert.name}</h4>
+                        <p className="text-gray-600 text-sm">{cert.issuing_organization}</p>
+                        <p className="text-gray-400 text-xs mt-1">
+                          Issued: {cert.issue_date}
+                        </p>
+                        {cert.expiry_date && (
+                          <p className="text-gray-400 text-xs">
+                            Expires: {cert.expiry_date}
+                          </p>
+                        )}
+                        {cert.credential_url && (
+                          <a
+                            href={cert.credential_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center text-blue-600 hover:text-blue-800 text-sm mt-2"
+                          >
+                            <ExternalLinkIcon className="h-3 w-3 mr-1" />
+                            View Certificate
+                          </a>
+                        )}
+                      </div>
+                      {isEditing && (
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => openCertificationModal(cert)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <EditIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteCertification(cert.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <XIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Client Profile Content */}
+        {activeProfileType === 'client' && availableAccountTypes.includes('client') && (
+          <>
+            {/* Client Information */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                <BuildingIcon className="h-5 w-5 inline mr-2" />
+                Client Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Industry</label>
+                  <select
+                    value={user.client_profile?.industry || ''}
+                    onChange={(e) => handleNestedInputChange('client_profile', 'industry', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  >
+                    <option value="">Select Industry</option>
+                    <option value="Technology">Technology</option>
+                    <option value="Healthcare">Healthcare</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Education">Education</option>
+                    <option value="Retail">Retail</option>
+                    <option value="Manufacturing">Manufacturing</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Company Size</label>
+                  <select
+                    value={user.client_profile?.company_size || ''}
+                    onChange={(e) => handleNestedInputChange('client_profile', 'company_size', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  >
+                    <option value="">Select Size</option>
+                    <option value="startup">Startup (1-10)</option>
+                    <option value="small">Small (11-50)</option>
+                    <option value="medium">Medium (51-200)</option>
+                    <option value="large">Large (200+)</option>
+                  </select>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
+
+              {/* Client Stats */}
+              {user.client_profile && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <h4 className="text-md font-medium text-gray-900 mb-4">Project Stats</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-900 mb-2">
+                        {user.client_profile.total_projects_posted}
+                      </div>
+                      <p className="text-sm text-gray-500">Projects Posted</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-900 mb-2">
+                        ${user.client_profile.total_spent}
+                      </div>
+                      <p className="text-sm text-gray-500">Total Spent</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Admin Profile Content */}
+        {activeProfileType === 'admin' && availableAccountTypes.includes('admin') && user?.is_staff && (
+          <>
+            {/* Admin Information */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                <ShieldIcon className="h-5 w-5 inline mr-2" />
+                Admin Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+                  <input
+                    type="text"
+                    value={user.admin_profile?.department || ''}
+                    onChange={(e) => handleNestedInputChange('admin_profile', 'department', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                    placeholder="e.g. Platform Operations"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Admin Level</label>
+                  <select
+                    value={user.admin_profile?.admin_level || 'basic'}
+                    onChange={(e) => handleNestedInputChange('admin_profile', 'admin_level', e.target.value)}
+                    disabled={!isEditing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  >
+                    <option value="basic">Basic</option>
+                    <option value="advanced">Advanced</option>
+                    <option value="super">Super Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Admin Permissions */}
+              <div className="mt-6">
+                <h4 className="text-md font-medium text-gray-900 mb-4">Admin Permissions</h4>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600">
+                    Admin permissions are managed by the system administrator.
+                  </p>
+                  <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded">
+                    <p className="text-xs text-purple-800">
+                      <ShieldIcon className="h-3 w-3 inline mr-1" />
+                      Staff-level access required for admin functions
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
         )}
 
         {/* Modals */}
+        <AccountTypeModal />
         <PasswordChangeModal />
         <EmailVerificationModal />
         <PhoneVerificationModal />
