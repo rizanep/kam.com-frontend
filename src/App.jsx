@@ -11,13 +11,16 @@ import Footer from './components/Layout/Footer'
 import UserProfile from './pages/Client/Profile'
 import ChangePassword from './components/ChangePassword'
 import FreelancerProfile from './pages/Client/OutProfile'
-
+import { JobProvider } from './context/JobContext'
+import JobsMainPage from './pages/Jobs/JobsMainPage'
 export default function App() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       <Navbar />
       <main className="flex-grow">
+        <JobProvider>
         <Routes>
+          <Route path="/jobs/*" element={<JobsMainPage />} />
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -28,6 +31,7 @@ export default function App() {
           <Route path='/user/resetpass' element={<ChangePassword />}/>
           <Route path='/freelancer/profile/:userId' element={<FreelancerProfile/>}/>
         </Routes>
+        </JobProvider>
       </main>
       <Footer />
     </div>
