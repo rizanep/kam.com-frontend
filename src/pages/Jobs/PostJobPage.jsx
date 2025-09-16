@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, X, Trash2, Send, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, X, Trash2, Send, Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { useJobs } from '../../context/JobContext';
+import { useNavigate } from 'react-router-dom'; // Add this import
 import { jobsApi } from '../../services/jobsApi';
 
 const PostJobPage = ({ onBack, onJobPosted }) => {
+  const { categories, skills, createJob } = useJobs();
   const [currentStep, setCurrentStep] = useState(1);
-  const [categories, setCategories] = useState([]);
-  const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [success, setSuccess] = useState('');
   
   const [formData, setFormData] = useState({
     title: '',
     description: '',
+    status: 'published',
     category: '',
     skills: [],
     job_type: 'fixed',
@@ -28,28 +31,13 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
     is_urgent: false,
     deadline: '',
     tags: [],
-    milestones: []
+    milestones: [],
+    attachments: []
   });
-
+const navigate = useNavigate(); // Add this line
   const [skillInput, setSkillInput] = useState('');
   const [tagInput, setTagInput] = useState('');
-
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  const loadInitialData = async () => {
-    try {
-      const [skillsData, categoriesData] = await Promise.all([
-        jobsApi.getSkills(),
-        jobsApi.getCategories()
-      ]);
-      setSkills(skillsData);
-      setCategories(categoriesData);
-    } catch (error) {
-      console.error('Error loading form data:', error);
-    }
-  };
+  const [attachmentFiles, setAttachmentFiles] = useState([]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -114,7 +102,44 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
     setFormData(prev => ({
       ...prev,
       milestones: prev.milestones.filter((_, i) => i !== index)
+        .map((milestone, i) => ({ ...milestone, order: i + 1 }))
     }));
+  };
+
+  const handleFileSelect = (files) => {
+    const validFiles = Array.from(files).filter(file => {
+      const validTypes = [
+        'application/pdf', 
+        'application/msword', 
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg', 
+        'image/png', 
+        'image/gif',
+        'text/plain'
+      ];
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      
+      if (!validTypes.includes(file.type)) {
+        setErrors(prev => ({ ...prev, attachments: `File "${file.name}" has an invalid type.` }));
+        return false;
+      }
+      
+      if (file.size > maxSize) {
+        setErrors(prev => ({ ...prev, attachments: `File "${file.name}" is too large. Maximum size is 10MB.` }));
+        return false;
+      }
+      
+      return true;
+    });
+
+    setAttachmentFiles(prev => [...prev, ...validFiles].slice(0, 5)); // Max 5 files
+    if (errors.attachments) {
+      setErrors(prev => ({ ...prev, attachments: '' }));
+    }
+  };
+
+  const removeAttachment = (index) => {
+    setAttachmentFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const validateStep = (step) => {
@@ -122,17 +147,53 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
     
     if (step === 1) {
       if (!formData.title.trim()) newErrors.title = 'Title is required';
+      if (formData.title.trim().length < 10) newErrors.title = 'Title must be at least 10 characters';
       if (!formData.description.trim()) newErrors.description = 'Description is required';
+      if (formData.description.trim().length < 50) newErrors.description = 'Description must be at least 50 characters';
       if (!formData.category) newErrors.category = 'Category is required';
+      // if (formData.skills.length === 0) newErrors.skills = 'At least one skill is required';
     }
     
     if (step === 2) {
       if (formData.job_type === 'hourly') {
         if (!formData.hourly_rate_min) newErrors.hourly_rate_min = 'Min hourly rate is required';
         if (!formData.hourly_rate_max) newErrors.hourly_rate_max = 'Max hourly rate is required';
+        if (parseFloat(formData.hourly_rate_min) >= parseFloat(formData.hourly_rate_max)) {
+          newErrors.hourly_rate_max = 'Max rate must be higher than min rate';
+        }
+      } else if (formData.job_type === 'milestone') {
+        if (formData.milestones.length === 0) {
+          newErrors.milestones = 'At least one milestone is required for milestone-based projects';
+        } else {
+          formData.milestones.forEach((milestone, index) => {
+            if (!milestone.title.trim()) {
+              newErrors[`milestone_${index}_title`] = 'Milestone title is required';
+            }
+            if (!milestone.amount || parseFloat(milestone.amount) <= 0) {
+              newErrors[`milestone_${index}_amount`] = 'Milestone amount is required';
+            }
+          });
+        }
       } else {
         if (!formData.budget_min) newErrors.budget_min = 'Min budget is required';
         if (!formData.budget_max) newErrors.budget_max = 'Max budget is required';
+        if (parseFloat(formData.budget_min) >= parseFloat(formData.budget_max)) {
+          newErrors.budget_max = 'Max budget must be higher than min budget';
+        }
+      }
+    }
+
+    if (step === 3) {
+      if (!formData.remote_allowed && !formData.location.trim()) {
+        newErrors.location = 'Location is required when remote work is not allowed';
+      }
+      if (formData.deadline) {
+        const deadlineDate = new Date(formData.deadline);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (deadlineDate <= today) {
+          newErrors.deadline = 'Deadline must be in the future';
+        }
       }
     }
     
@@ -146,22 +207,59 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
     }
   };
 
+  const handleBack = () => {
+    setCurrentStep(prev => prev - 1);
+  };
+
+  const calculateTotalBudget = () => {
+    if (formData.job_type === 'milestone') {
+      return formData.milestones.reduce((total, milestone) => {
+        return total + (parseFloat(milestone.amount) || 0);
+      }, 0);
+    }
+    return null;
+  };
+
   const handleSubmit = async () => {
     if (!validateStep(3)) return;
     
     setLoading(true);
+    setErrors({});
+    
     try {
       const submissionData = {
         ...formData,
         skill_ids: formData.skills,
+        status: 'published', // Set status to published
         budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
         budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
         hourly_rate_min: formData.hourly_rate_min ? parseFloat(formData.hourly_rate_min) : null,
         hourly_rate_max: formData.hourly_rate_max ? parseFloat(formData.hourly_rate_max) : null,
+        milestones: formData.milestones.map(milestone => ({
+          ...milestone,
+          amount: parseFloat(milestone.amount)
+        }))
       };
 
-      const newJob = await jobsApi.createJob(submissionData);
-      onJobPosted && onJobPosted(newJob);
+      const newJob = await createJob(submissionData);
+      
+      // Upload attachments if any
+      if (attachmentFiles.length > 0) {
+        for (const file of attachmentFiles) {
+          await jobsApi.uploadJobAttachment(newJob.id, file);
+        }
+      }
+
+      setSuccess('Job posted successfully! Redirecting to My Jobs...');
+      if (onJobPosted) {
+        onJobPosted(newJob);
+      }
+      
+      // Redirect to My Jobs after a short delay
+      setTimeout(() => {
+        navigate('/jobs?view=my-jobs');
+      }, 1500);
+      
     } catch (error) {
       setErrors({ submit: error.message });
     } finally {
@@ -172,6 +270,8 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
   const getSelectedSkills = () => {
     return skills.filter(skill => formData.skills.includes(skill.id));
   };
+
+  const totalBudget = calculateTotalBudget();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -185,6 +285,14 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
             <h1 className="text-2xl font-bold text-gray-900">Post a New Job</h1>
           </div>
         </div>
+
+        {/* Success Message */}
+        {success && (
+          <div className="mb-6 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-center">
+            <CheckCircle size={20} className="mr-2" />
+            {success}
+          </div>
+        )}
 
         <div className="bg-white rounded-lg border border-gray-200 p-8">
           {/* Step Indicator */}
@@ -226,6 +334,7 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                   placeholder="e.g. Full Stack Web Developer for E-commerce Platform"
                 />
                 {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title}</p>}
+                <p className="text-xs text-gray-500 mt-1">{formData.title.length}/100 characters</p>
               </div>
 
               <div>
@@ -242,6 +351,7 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                   placeholder="Describe your project requirements, goals, and expectations..."
                 />
                 {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
+                <p className="text-xs text-gray-500 mt-1">{formData.description.length}/2000 characters</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -284,7 +394,7 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
               {/* Skills Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Required Skills
+                  Required Skills *
                 </label>
                 <div className="space-y-3">
                   <div className="flex">
@@ -338,6 +448,7 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                       </span>
                     ))}
                   </div>
+                  {errors.skills && <p className="text-red-500 text-sm mt-1">{errors.skills}</p>}
                 </div>
               </div>
             </div>
@@ -399,6 +510,8 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                         errors.hourly_rate_min ? 'border-red-500' : 'border-gray-300'
                       }`}
                       placeholder="25"
+                      min="1"
+                      step="0.01"
                     />
                     {errors.hourly_rate_min && <p className="text-red-500 text-sm mt-1">{errors.hourly_rate_min}</p>}
                   </div>
@@ -414,9 +527,133 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                         errors.hourly_rate_max ? 'border-red-500' : 'border-gray-300'
                       }`}
                       placeholder="75"
+                      min="1"
+                      step="0.01"
                     />
                     {errors.hourly_rate_max && <p className="text-red-500 text-sm mt-1">{errors.hourly_rate_max}</p>}
                   </div>
+                </div>
+              ) : formData.job_type === 'milestone' ? (
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Project Milestones *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addMilestone}
+                      className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                    >
+                      <Plus size={16} />
+                      Add Milestone
+                    </button>
+                  </div>
+                  
+                  {formData.milestones.length === 0 ? (
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                      <p className="text-gray-500 mb-2">No milestones added yet</p>
+                      <button
+                        type="button"
+                        onClick={addMilestone}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                      >
+                        Add First Milestone
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {formData.milestones.map((milestone, index) => (
+                        <div key={index} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex justify-between items-center mb-3">
+                            <h4 className="font-medium text-gray-900">Milestone {milestone.order}</h4>
+                            <button
+                              type="button"
+                              onClick={() => removeMilestone(index)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Title *
+                              </label>
+                              <input
+                                type="text"
+                                value={milestone.title}
+                                onChange={(e) => updateMilestone(index, 'title', e.target.value)}
+                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                  errors[`milestone_${index}_title`] ? 'border-red-500' : 'border-gray-300'
+                                }`}
+                                placeholder="e.g. Initial Design"
+                              />
+                              {errors[`milestone_${index}_title`] && (
+                                <p className="text-red-500 text-xs mt-1">{errors[`milestone_${index}_title`]}</p>
+                              )}
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Amount ($) *
+                              </label>
+                              <input
+                                type="number"
+                                value={milestone.amount}
+                                onChange={(e) => updateMilestone(index, 'amount', e.target.value)}
+                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                  errors[`milestone_${index}_amount`] ? 'border-red-500' : 'border-gray-300'
+                                }`}
+                                placeholder="500"
+                                min="1"
+                                step="0.01"
+                              />
+                              {errors[`milestone_${index}_amount`] && (
+                                <p className="text-red-500 text-xs mt-1">{errors[`milestone_${index}_amount`]}</p>
+                              )}
+                            </div>
+                            
+                            <div className="md:col-span-2">
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Description
+                              </label>
+                              <textarea
+                                value={milestone.description}
+                                onChange={(e) => updateMilestone(index, 'description', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                rows={2}
+                                placeholder="Describe what will be delivered in this milestone..."
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Due Date
+                              </label>
+                              <input
+                                type="date"
+                                value={milestone.due_date}
+                                onChange={(e) => updateMilestone(index, 'due_date', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                min={new Date().toISOString().split('T')[0]}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {totalBudget > 0 && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <p className="text-blue-800 font-medium">
+                            Total Project Budget: ${totalBudget.toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {errors.milestones && <p className="text-red-500 text-sm mt-2">{errors.milestones}</p>}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -432,6 +669,8 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                         errors.budget_min ? 'border-red-500' : 'border-gray-300'
                       }`}
                       placeholder="500"
+                      min="1"
+                      step="0.01"
                     />
                     {errors.budget_min && <p className="text-red-500 text-sm mt-1">{errors.budget_min}</p>}
                   </div>
@@ -447,6 +686,8 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                         errors.budget_max ? 'border-red-500' : 'border-gray-300'
                       }`}
                       placeholder="2000"
+                      min="1"
+                      step="0.01"
                     />
                     {errors.budget_max && <p className="text-red-500 text-sm mt-1">{errors.budget_max}</p>}
                   </div>
@@ -482,8 +723,11 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                     value={formData.deadline}
                     onChange={(e) => handleInputChange('deadline', e.target.value)}
                     min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.deadline ? 'border-red-500' : 'border-gray-300'
+                    }`}
                   />
+                  {errors.deadline && <p className="text-red-500 text-sm mt-1">{errors.deadline}</p>}
                 </div>
               </div>
             </div>
@@ -518,9 +762,12 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                         type="text"
                         value={formData.location}
                         onChange={(e) => handleInputChange('location', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          errors.location ? 'border-red-500' : 'border-gray-300'
+                        }`}
                         placeholder="e.g. San Francisco, CA"
                       />
+                      {errors.location && <p className="text-red-500 text-sm mt-1">{errors.location}</p>}
                     </div>
                   )}
                 </div>
@@ -538,6 +785,7 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                       Mark as urgent
                     </label>
                   </div>
+                  <p className="text-xs text-gray-500">Urgent jobs get more visibility but may cost extra.</p>
                 </div>
               </div>
 
@@ -587,8 +835,62 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
                 </div>
               </div>
 
+              {/* File Attachments */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Project Files (Optional)
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <Upload size={32} className="mx-auto text-gray-400 mb-4" />
+                  <p className="text-gray-600 mb-2">Drop files here or click to browse</p>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Support: PDF, DOC, DOCX, JPG, PNG, GIF, TXT (Max: 10MB each, 5 files total)
+                  </p>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt"
+                    onChange={(e) => handleFileSelect(e.target.files)}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <label 
+                    htmlFor="file-upload"
+                    className="inline-block bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 cursor-pointer"
+                  >
+                    Choose Files
+                  </label>
+                </div>
+
+                {/* Attachment List */}
+                {attachmentFiles.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {attachmentFiles.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(index)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {errors.attachments && <p className="text-red-500 text-sm mt-2">{errors.attachments}</p>}
+              </div>
+
               {errors.submit && (
-                <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+                <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex items-center">
+                  <AlertCircle size={20} className="mr-2" />
                   {errors.submit}
                 </div>
               )}
@@ -601,7 +903,7 @@ const PostJobPage = ({ onBack, onJobPosted }) => {
               {currentStep > 1 && (
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(prev => prev - 1)}
+                  onClick={handleBack}
                   className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                   disabled={loading}
                 >
