@@ -660,9 +660,11 @@ const ClientJobDetailPage = ({ jobId, onBack, onEdit }) => {
                 </button>
               </>
             )}
+            
           </div>
+          
         </div>
-
+            
         {/* Tabs */}
         <div className="bg-white rounded-lg border border-gray-200">
           {!isEditing && (
@@ -1257,7 +1259,7 @@ const ClientJobDetailPage = ({ jobId, onBack, onEdit }) => {
                                 )}
                               </div>
                               <button
-                                onClick={() => window.open(attachment.file, '_blank')}
+                                onClick={() => window.open(attachment.file_url, '_blank')}
                                 className="text-blue-600 hover:text-blue-800"
                               >
                                 <Download size={16} />

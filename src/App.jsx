@@ -1,7 +1,12 @@
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { NotificationProvider } from './context/NotificationContext'
 import { JobProvider } from './context/JobContext'
+import { BidsProvider } from './context/BidsContext'
+import { useLocation } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 
 // Pages
 import LandingPage from './pages/LandingPage'
@@ -17,11 +22,17 @@ import FreelancerProfile from './pages/Client/OutProfile'
 // Job Portal Components
 import JobsMainPage from './pages/Jobs/JobsMainPage'
 import MyJobsPage from './pages/Jobs/MyJobsPage'
+import PostJobPage from './pages/Jobs/PostJobPage'
 
 // Layout Components
 import Navbar from './components/Layout/Navbar'
 import Footer from './components/Layout/Footer'
-import PostJobPage from './pages/Jobs/PostJobPage'
+import BidsManagementDashboard from './pages/Client/BidsManagmentDashboard'
+import BidsDashboard from './pages/Freelancer/BidsDashboard'
+import SavedJobsPage from './pages/Jobs/SavedJobsPage'
+import MessagingSystem from './pages/Messages/MessagingSystem'
+import NotificationsPage from './pages/NotificationsPage'
+import AIChatWidget from './pages/AIChatWidget'
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
@@ -88,6 +99,13 @@ const UnauthorizedPage = () => (
 
 // Main App Routes Component
 const AppRoutes = () => {
+  const location = useLocation();
+
+  // Routes where footer should be hidden
+  const noFooterRoutes = ['/login', '/register', '/messages', '/notifications'];
+
+  const showFooter = !noFooterRoutes.includes(location.pathname);
+  
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       <Navbar />
@@ -124,7 +142,6 @@ const AppRoutes = () => {
             } 
           />
           
-          {/* Fixed: Add dedicated route for client my-jobs */}
           <Route 
             path="/client/my-jobs" 
             element={
@@ -132,13 +149,36 @@ const AppRoutes = () => {
                 <JobProvider>
                   <MyJobsPage 
                     onJobClick={(jobId) => window.location.href = `/jobs?jobId=${jobId}`}
-                    onPostJob={() => window.location.href = '/freelancer/post-jobs'}
+                    onPostJob={() => window.location.href = '/jobs/post'}
                   />
                 </JobProvider>
               </ProtectedRoute>
             } 
           />
-          
+
+          {/* Client Bids Management */}
+          <Route 
+            path="/client/proposals" 
+            element={
+              <ProtectedRoute allowedRoles={['client']}>
+                <JobProvider>
+                <BidsProvider>
+                  <BidsManagementDashboard />
+                </BidsProvider>
+                </JobProvider>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/client/saved-jobs" 
+            element={
+              <ProtectedRoute allowedRoles={['client']}>
+                <JobProvider>
+                <SavedJobsPage/>
+                </JobProvider>
+              </ProtectedRoute>
+            } 
+          />
           <Route 
             path="/client/profile" 
             element={
@@ -157,28 +197,29 @@ const AppRoutes = () => {
               </ProtectedRoute>
             } 
           />
+
+          {/* Freelancer Bids Dashboard */}
           <Route 
-            path="/freelancer/browse-jobs" 
+            path="/freelancer/proposals" 
             element={
               <ProtectedRoute allowedRoles={['freelancer']}>
-                <JobProvider>
-                  <JobsMainPage />
-                </JobProvider>
+                <BidsProvider>
+                  <BidsDashboard />
+                </BidsProvider>
               </ProtectedRoute>
             } 
           />
         
           {/* Post Job Route */}
           <Route 
-            path="/freelancer/post-jobs" 
+            path="/jobs/post" 
             element={
-              <ProtectedRoute allowedRoles={['client', 'freelancer']}>
+              <ProtectedRoute allowedRoles={['client']}>
                 <JobProvider>
                   <PostJobPage 
                     onBack={() => window.history.back()}
                     onJobPosted={(job) => {
                       console.log('Job posted:', job);
-                      // Navigate to client my-jobs if user is a client
                       window.location.href = '/client/my-jobs';
                     }}
                   />
@@ -214,6 +255,24 @@ const AppRoutes = () => {
               </ProtectedRoute>
             } 
           />
+
+          <Route 
+            path="/messages" 
+            element={
+              <ProtectedRoute>
+                <MessagingSystem />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/notifications" 
+            element={
+              <ProtectedRoute>
+                <NotificationsPage />
+              </ProtectedRoute>
+            } 
+          />
+
           <Route 
             path="/freelancer/profile/:userId" 
             element={
@@ -244,16 +303,65 @@ const AppRoutes = () => {
           />
         </Routes>
       </main>
-      <Footer />
+       {/* Conditionally render footer */}
+      {showFooter && <Footer />}
+      <AIChatWidget />
+      {/* Toast Container with custom styles for notifications */}
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+        className="custom-toast-container"
+        toastClassName="custom-toast"
+        bodyClassName="custom-toast-body"
+        style={{
+          fontSize: '14px',
+          zIndex: 9999,
+        }}
+        limit={5} // Allow up to 5 toasts at a time
+      />
+      
+      {/* Custom CSS for notification toasts */}
+      <style jsx global>{`
+        .notification-toast {
+          background: transparent !important;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+          border-radius: 0.5rem !important;
+          padding: 0 !important;
+        }
+        
+        .notification-toast .Toastify__toast-body {
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        
+        .custom-toast-container .Toastify__toast--info {
+          background: transparent !important;
+        }
+        
+        .custom-toast {
+          border-radius: 0.5rem;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+      `}</style>
     </div>
   );
 };
 
-// Main App Component
+// Main App Component with nested providers
 export default function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <NotificationProvider>
+        <AppRoutes />
+      </NotificationProvider>
     </AuthProvider>
   );
 }

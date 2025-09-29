@@ -1,24 +1,28 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { Search, AlertCircle, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useJobs } from '../../context/JobContext';
 import JobCard from '../../components/Jobs/JobCard';
 import JobFilters from '../../components/Jobs/JobFilters';
+import AuthContext from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const JobsPage = ({ onJobClick, onJobApply }) => {
-  const { 
-    jobs, 
-    categories, 
-    loading, 
-    error, 
-    filters, 
-    searchQuery, 
+  const {
+    jobs,
+    categories,
+    loading,
+    error,
+    filters,
+    searchQuery,
     pagination,
-    dispatch, 
-    loadJobs, 
-    saveJob, 
+    dispatch,
+    loadJobs,
+    saveJob,
     unsaveJob,
-    clearError 
+    clearError
   } = useJobs();
+  const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
 
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [message, setMessage] = useState('');
@@ -26,7 +30,6 @@ const JobsPage = ({ onJobClick, onJobApply }) => {
   useEffect(() => {
     loadJobs({ ...filters, search: searchQuery, page: 1 });
   }, [filters, searchQuery]);
-
   useEffect(() => {
     // Clear any previous errors when component mounts
     clearError();
@@ -75,31 +78,56 @@ const JobsPage = ({ onJobClick, onJobApply }) => {
   };
 
   const getActiveFiltersCount = () => {
-    return Object.values(filters).filter(value => 
-      value && value !== '' && value !== false && value !== 'all'
-    ).length + (searchQuery ? 1 : 0);
+    return (
+      Object.values(filters).filter(
+        (value) => value && value !== '' && value !== false && value !== 'all'
+      ).length + (searchQuery ? 1 : 0)
+    );
   };
 
+  // compute start/end counts dynamically
+  const perPage = pagination.pageSize || jobs.length;
+  const startIndex = (pagination.currentPage - 1) * perPage + 1;
+  const endIndex = startIndex + jobs.length - 1;
+const handleMessageClient = (clientId, clientInfo) => {
+  // Navigate to messaging page with recipient information
+  const params = new URLSearchParams({
+    recipient: clientId,
+    name: clientInfo?.first_name && clientInfo?.last_name 
+      ? `${clientInfo.first_name} ${clientInfo.last_name}`
+      : clientInfo?.username || 'Client',
+    profilePicture: clientInfo?.profile_picture || '',
+    messageType: 'job', // This will be a job-related conversation
+    autoStart: 'true'
+  });
+  
+  navigate(`/messages?${params.toString()}`);
+};
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Browse Jobs</h1>
-          <p className="text-gray-600">Find your next opportunity from thousands of available jobs</p>
+          <p className="text-gray-600">
+            Find your next opportunity from thousands of available jobs
+          </p>
         </div>
 
         {/* Messages */}
         {message && (
-          <div className={`mb-6 p-4 rounded-lg flex items-center ${
-            message.includes('Error') || message.includes('Failed')
-              ? 'bg-red-50 border border-red-200 text-red-800'
-              : 'bg-green-50 border border-green-200 text-green-800'
-          }`}>
-            {message.includes('Error') || message.includes('Failed') ? 
-              <AlertCircle size={20} className="mr-2" /> : 
+          <div
+            className={`mb-6 p-4 rounded-lg flex items-center ${
+              message.includes('Error') || message.includes('Failed')
+                ? 'bg-red-50 border border-red-200 text-red-800'
+                : 'bg-green-50 border border-green-200 text-green-800'
+            }`}
+          >
+            {message.includes('Error') || message.includes('Failed') ? (
+              <AlertCircle size={20} className="mr-2" />
+            ) : (
               <CheckCircle size={20} className="mr-2" />
-            }
+            )}
             {message}
           </div>
         )}
@@ -133,7 +161,7 @@ const JobsPage = ({ onJobClick, onJobApply }) => {
               {loading ? 'Searching...' : 'Search'}
             </button>
           </div>
-          
+
           <JobFilters
             filters={filters}
             onFiltersChange={handleFiltersChange}
@@ -146,7 +174,8 @@ const JobsPage = ({ onJobClick, onJobApply }) => {
             <div className="mt-4 pt-4 border-t border-gray-200">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">
-                  {getActiveFiltersCount()} filter{getActiveFiltersCount() !== 1 ? 's' : ''} applied
+                  {getActiveFiltersCount()} filter
+                  {getActiveFiltersCount() !== 1 ? 's' : ''} applied
                 </span>
                 <button
                   onClick={clearAllFilters}
@@ -165,9 +194,12 @@ const JobsPage = ({ onJobClick, onJobApply }) => {
             <p className="text-gray-600">
               {pagination.totalJobs > 0 ? (
                 <>
-                  Showing {((pagination.currentPage - 1) * 10) + 1} - {Math.min(pagination.currentPage * 10, pagination.totalJobs)} of {pagination.totalJobs} jobs
+                  Showing {startIndex} - {endIndex} of {pagination.totalJobs} jobs
                   {searchQuery && (
-                    <span> for "<strong>{searchQuery}</strong>"</span>
+                    <span>
+                      {' '}
+                      for "<strong>{searchQuery}</strong>"
+                    </span>
                   )}
                 </>
               ) : (
@@ -188,7 +220,9 @@ const JobsPage = ({ onJobClick, onJobApply }) => {
             <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
               <Search size={48} className="text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
-              <p className="text-gray-600 mb-4">Try adjusting your search criteria or filters.</p>
+              <p className="text-gray-600 mb-4">
+                Try adjusting your search criteria or filters.
+              </p>
               {getActiveFiltersCount() > 0 && (
                 <button
                   onClick={clearAllFilters}
@@ -207,6 +241,12 @@ const JobsPage = ({ onJobClick, onJobApply }) => {
                   onJobClick={onJobClick}
                   onSave={handleSave}
                   onApply={onJobApply}
+                  onMessageClient={handleMessageClient}
+                  onClientClick={(clientId) => {
+                    navigate(`/freelancer/profile/${clientId}`);
+                  }}
+                  currentUserId={user?.id} // Pass current user's ID
+                  userRole={user.account_types} // Pass user role
                 />
               ))}
 
@@ -216,7 +256,7 @@ const JobsPage = ({ onJobClick, onJobApply }) => {
                   <div className="flex items-center text-sm text-gray-500">
                     Page {pagination.currentPage} of {pagination.totalPages}
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => handlePageChange(pagination.currentPage - 1)}
@@ -229,10 +269,8 @@ const JobsPage = ({ onJobClick, onJobApply }) => {
 
                     {/* Page Numbers */}
                     <div className="flex space-x-1">
-                      {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                        const page = Math.max(1, pagination.currentPage - 2) + i;
-                        if (page > pagination.totalPages) return null;
-                        
+                      {Array.from({ length: pagination.totalPages }, (_, i) => {
+                        const page = i + 1;
                         return (
                           <button
                             key={page}

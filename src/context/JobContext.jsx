@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { jobsApi } from '../services/jobsApi';
 
-const JobContext = createContext();
+export const JobContext = createContext();
 
 const initialState = {
   jobs: [],

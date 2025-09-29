@@ -103,6 +103,9 @@ const JobsMainPage = () => {
 
   const handleJobPosted = (newJob) => {
     handleViewChange('my-jobs');
+
+      console.log('Job posted successfully:', newJob);
+
     // The context will handle updating the job list
   };
 

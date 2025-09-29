@@ -259,11 +259,12 @@ export const useFileUpload = () => {
 };
 
 // Custom hook for pagination
-export const usePagination = (initialPage = 1, itemsPerPage = 10) => {
+export const usePagination = (initialPage = 1, initialItemsPerPage = 10) => {
   const [currentPage, setCurrentPage] = useState(initialPage);
+  const [itemsPerPage, setItemsPerPage] = useState(initialItemsPerPage);
   const [totalItems, setTotalItems] = useState(0);
 
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
   const hasNext = currentPage < totalPages;
   const hasPrevious = currentPage > 1;
 
@@ -287,17 +288,17 @@ export const usePagination = (initialPage = 1, itemsPerPage = 10) => {
     currentPage,
     totalPages,
     totalItems,
+    itemsPerPage,
     hasNext,
     hasPrevious,
-    itemsPerPage,
     goToPage,
     nextPage,
     previousPage,
     reset,
-    setTotalItems
+    setTotalItems,
+    setItemsPerPage // ✅ allows changing page size at runtime
   };
 };
-
 // Custom hook for local storage state
 export const useLocalStorage = (key, initialValue) => {
   const [storedValue, setStoredValue] = useState(() => {

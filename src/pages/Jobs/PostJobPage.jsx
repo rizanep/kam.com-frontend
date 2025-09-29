@@ -219,53 +219,80 @@ const navigate = useNavigate(); // Add this line
     }
     return null;
   };
+  const handleSubmit = async (e) => {
+  if (e && typeof e.preventDefault === "function") {
+    e.preventDefault();
+    e.stopPropagation();
+  }
 
-  const handleSubmit = async () => {
-    if (!validateStep(3)) return;
-    
-    setLoading(true);
-    setErrors({});
-    
-    try {
-      const submissionData = {
-        ...formData,
-        skill_ids: formData.skills,
-        status: 'published', // Set status to published
-        budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
-        budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
-        hourly_rate_min: formData.hourly_rate_min ? parseFloat(formData.hourly_rate_min) : null,
-        hourly_rate_max: formData.hourly_rate_max ? parseFloat(formData.hourly_rate_max) : null,
-        milestones: formData.milestones.map(milestone => ({
-          ...milestone,
-          amount: parseFloat(milestone.amount)
-        }))
-      };
+  if (!validateStep(3)) return;
 
-      const newJob = await createJob(submissionData);
-      
-      // Upload attachments if any
-      if (attachmentFiles.length > 0) {
-        for (const file of attachmentFiles) {
-          await jobsApi.uploadJobAttachment(newJob.id, file);
+  setLoading(true);
+  setErrors({});
+
+  try {
+    const submissionData = {
+      ...formData,
+      skill_ids: formData.skills,
+      status: "published",
+      budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
+      budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
+      hourly_rate_min: formData.hourly_rate_min ? parseFloat(formData.hourly_rate_min) : null,
+      hourly_rate_max: formData.hourly_rate_max ? parseFloat(formData.hourly_rate_max) : null,
+      milestones: formData.milestones.map((m) => ({
+        ...m,
+        amount: parseFloat(m.amount),
+      })),
+    };
+
+    console.log("=== JOB CREATION START ===");
+    console.log("Submission data:", submissionData);
+
+    // Call API
+    
+const newJob = await createJob(submissionData);
+
+if (!newJob || !newJob.id) {
+  throw new Error("Job creation failed – no job ID in response");
+}
+
+console.log("=== JOB CREATED SUCCESSFULLY ===");
+console.log("New job:", newJob);
+console.log("Job ID:", newJob.id);
+
+    // Upload attachments if any
+    if (attachmentFiles.length > 0) {
+      console.log("=== STARTING ATTACHMENT UPLOAD ===");
+      console.log("Files:", attachmentFiles);
+
+      for (let i = 0; i < attachmentFiles.length; i++) {
+        const file = attachmentFiles[i];
+        console.log(`Uploading file ${i + 1}/${attachmentFiles.length}:`, file.name);
+
+        try {
+          const result = await jobsApi.uploadJobAttachment(newJob.id, file);
+          console.log(`✓ File ${i + 1} uploaded successfully:`, result);
+        } catch (uploadError) {
+          console.error(`✗ File ${i + 1} upload failed:`, uploadError);
         }
       }
-
-      setSuccess('Job posted successfully! Redirecting to My Jobs...');
-      if (onJobPosted) {
-        onJobPosted(newJob);
-      }
-      
-      // Redirect to My Jobs after a short delay
-      setTimeout(() => {
-        navigate('/jobs?view=my-jobs');
-      }, 1500);
-      
-    } catch (error) {
-      setErrors({ submit: error.message });
-    } finally {
-      setLoading(false);
+      console.log("=== ATTACHMENT UPLOAD COMPLETE ===");
+    } else {
+      console.log("No attachments to upload");
     }
-  };
+
+    setSuccess("Job posted successfully! Redirecting to My Jobs...");
+    onJobPosted?.(newJob);
+
+    setTimeout(() => navigate("/jobs?view=my-jobs"), 1500);
+  } catch (error) {
+    console.error("=== JOB CREATION/UPLOAD ERROR ===");
+    console.error(error);
+    setErrors({ submit: error.message });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getSelectedSkills = () => {
     return skills.filter(skill => formData.skills.includes(skill.id));

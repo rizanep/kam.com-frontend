@@ -42,7 +42,6 @@ const MyJobsPage = ({ onJobClick, onPostJob }) => {
     
     loadJobStats();
   }, [loadMyJobs]);
-
   const loadJobStats = async () => {
     if (!jobsApi || !jobsApi.getClientStats) {
       console.warn('getClientStats method not available');

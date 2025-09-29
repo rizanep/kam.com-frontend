@@ -87,7 +87,7 @@ const UserProfile = () => {
   const getAuthToken = () => {
     return localStorage.getItem('access_token');
   };
-
+const tokenn=localStorage.getItem("access_token")
   const getAuthHeaders = () => {
     const token = getAuthToken();
     return {
@@ -95,7 +95,7 @@ const UserProfile = () => {
       'Content-Type': 'application/json',
     };
   };
-
+console.log(user)
   const apiCall = async (url, method = 'GET', data = null) => {
     try {
       const config = {
@@ -1650,7 +1650,16 @@ const UserProfile = () => {
       </div>
     );
   };
+const wsUrl = `ws://localhost:8003/ws/notifications/?token=${tokenn}`;
+const socket = new WebSocket(wsUrl);
 
+socket.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    if (data.type === 'notification') {
+        // Handle bid notifications
+        console.log(data.data);
+    }
+};
   const PortfolioModal = () => {
     const [formData, setFormData] = useState(editingItem || {
       title: '',
@@ -1813,10 +1822,8 @@ const UserProfile = () => {
                 <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center">
                   {user.profile_picture ? (
                     <img
-                      src={user.profile_picture.startsWith('http')
-                        ? user.profile_picture
-                        : `http://localhost:8000${user.profile_picture}`}
-                      alt="Profile"
+  src={`http://localhost:8000/${user.profile_picture}`}
+                      alt="Prsofile"
                       className="w-24 h-24 rounded-full object-cover"
                     />
                   ) : (

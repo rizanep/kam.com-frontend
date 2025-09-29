@@ -9,7 +9,7 @@ const PublicProfile = ({ apiBaseUrl = 'http://localhost:8000/api/auth' }) => {
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [activeAccountType, setActiveAccountType] = useState('freelancer');
   const { userId } = useParams();
-
+  const token= localStorage.getItem("access_token")
   useEffect(() => {
     fetchUserProfile();
   }, [userId]);
@@ -73,7 +73,16 @@ const PublicProfile = ({ apiBaseUrl = 'http://localhost:8000/api/auth' }) => {
       />
     ));
   };
+const wsUrl = `ws://localhost:8003/ws/notifications/?token=${token}`;
+const socket = new WebSocket(wsUrl);
 
+socket.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    if (data.type === 'notification') {
+        // Handle bid notifications
+        console.log(data.data);
+    }
+};
   const getSocialIcon = (platform) => {
     switch (platform) {
       case 'linkedin': return <Linkedin className="w-4 h-4" />;
@@ -226,9 +235,7 @@ const PublicProfile = ({ apiBaseUrl = 'http://localhost:8000/api/auth' }) => {
           <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200">
             {profile.profile_picture ? (
               <img
-                src={profile.profile_picture.startsWith('http') 
-                  ? profile.profile_picture 
-                  : `http://localhost:8000${profile.profile_picture}`}
+                src={`http://localhost:8000/${profile.profile_picture}`}
                 alt={profile.full_name || profile.username}
                 className="w-full h-full object-cover"
               />

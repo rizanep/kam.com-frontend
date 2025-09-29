@@ -6,6 +6,7 @@ import { GoogleLogin } from '@react-oauth/google'
 import axios from 'axios'
 import MFASetupModal from './MFASetupModal'
 import MFAVerificationModal from './MFAVerificationModal'
+import { toast } from 'react-toastify'
 
 const Login = () => {
   const { login, error, clearError } = useAuth()
@@ -22,45 +23,74 @@ const Login = () => {
   const [showMfaVerification, setShowMfaVerification] = useState(false)
   const [tempCredentials, setTempCredentials] = useState(null)
 
-  const handleSubmit = async (e) => {
-  e.preventDefault()
-  setLoading(true)
-  clearError()
-
-  try {
-    await login(email, password)
-    // navigation happens inside AuthContext after login
-  } catch (err) {
-    // Check if it's an MFA-related response
-    if (err.message === 'MFA Required' && err.response?.data?.mfa_required) {
-      setMfaRequired(true)
-      setMfaSetupRequired(err.response.data.mfa_setup_required)
-      setTempCredentials({ email, password })
+  // Helper function to get error message from backend response
+  const getErrorMessage = (error, defaultMessage = 'An error occurred') => {
+    if (error.response?.data) {
+      const data = error.response.data;
       
-      if (err.response.data.mfa_setup_required) {
-        setShowMfaSetup(true)
+      if (data.error) {
+        return data.error;
+      } else if (data.message) {
+        return data.message;
+      } else if (data.detail) {
+        return data.detail;
+      } else if (data.non_field_errors) {
+        return Array.isArray(data.non_field_errors) 
+          ? data.non_field_errors[0] 
+          : data.non_field_errors;
+      } else if (typeof data === 'string') {
+        return data;
       } else {
-        setShowMfaVerification(true)
+        const firstError = Object.values(data)[0];
+        return Array.isArray(firstError) ? firstError[0] : firstError;
       }
-    } else {
-      console.error('Login failed:', err.message)
     }
-  } finally {
-    setLoading(false)
-  }
-}
+    return error.message || defaultMessage;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    clearError();
+
+    try {
+      await login(email, password);
+      // Success toast is handled in AuthContext
+    } catch (err) {
+      if (err.message === 'MFA Required' && err.response?.data?.mfa_required) {
+        setMfaRequired(true);
+        setMfaSetupRequired(err.response.data.mfa_setup_required);
+        setTempCredentials({ email, password });
+
+        if (err.response.data.mfa_setup_required) {
+          setShowMfaSetup(true);
+          toast.info('Please set up two-factor authentication to continue');
+        } else {
+          setShowMfaVerification(true);
+          toast.info('Please enter your two-factor authentication code');
+        }
+      } else {
+        // Error toast is handled in AuthContext
+        console.error('Login failed:', err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleMfaVerificationSuccess = () => {
     setShowMfaVerification(false)
     setMfaRequired(false)
     setTempCredentials(null)
+    toast.success('Two-factor authentication successful!');
     // Navigation will be handled by the verification modal
   }
 
   const handleMfaSetupComplete = () => {
     setShowMfaSetup(false)
     setMfaSetupRequired(false)
-    setShowMfaVerification(true) // Now show verification after setup
+    setShowMfaVerification(true)
+    toast.success('Two-factor authentication setup complete!');
   }
 
   const handleResetMfaFlow = () => {
@@ -75,68 +105,49 @@ const Login = () => {
   // Helper function to get primary account type for navigation
   const getPrimaryAccountType = (accountTypes) => {
     if (!Array.isArray(accountTypes) || accountTypes.length === 0) {
-      return 'freelancer'; // default fallback
+      return 'freelancer';
     }
-    return accountTypes[0]; // Use first account type as primary
+    return accountTypes[0];
   }
 
   // Google login success handler
   const handleGoogleSuccess = async (credentialResponse) => {
-    setLoading(true)
-    clearError()
-    
+    setLoading(true);
+    clearError();
+
     try {
-      console.log("Google response:", credentialResponse)
-
-      // Send the credential to your backend - no account_types needed for login
       const res = await axios.post(
-        'http://localhost:8000/api/auth/google/',
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/auth/google/`,
         { credential: credentialResponse.credential },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      )
+        { headers: { 'Content-Type': 'application/json' } }
+      );
 
-      console.log('JWT Tokens:', res.data)
+      toast.success('Google login successful!');
 
-      // Save JWT tokens
-      localStorage.setItem('access_token', res.data.access)
-      localStorage.setItem('refresh_token', res.data.refresh)
+      localStorage.setItem('access_token', res.data.access);
+      localStorage.setItem('refresh_token', res.data.refresh);
 
-      // Check for redirect path
-      const redirectPath = sessionStorage.getItem('redirectAfterLogin')
-      console.log(res.data.user)
-      
+      const redirectPath = sessionStorage.getItem('redirectAfterLogin');
       if (redirectPath) {
-        sessionStorage.removeItem('redirectAfterLogin')
-        window.location.href = redirectPath
+        sessionStorage.removeItem('redirectAfterLogin');
+        window.location.href = redirectPath;
       } else {
-        // Default redirect based on user's account types (use primary account type)
-        const primaryAccountType = getPrimaryAccountType(res.data.user.account_types)
-        
-        if (primaryAccountType === 'client') {
-          window.location.href = '/client/dashboard'
-        } else if (primaryAccountType === 'admin') {
-          window.location.href = '/admin/dashboard'
-        } else {
-          window.location.href = '/freelancer/dashboard'
-        }
+        const primaryAccountType = getPrimaryAccountType(res.data.user.account_types);
+        if (primaryAccountType === 'client') window.location.href = '/client/dashboard';
+        else if (primaryAccountType === 'admin') window.location.href = '/admin/dashboard';
+        else window.location.href = '/freelancer/dashboard';
       }
     } catch (err) {
-      console.error('Google login failed:', err)
-      const errorMessage = err.response?.data?.error || 'Google login failed. Please try again.'
-      alert(errorMessage)
+      const message = getErrorMessage(err, 'Google login failed. Please try again.');
+      toast.error(message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleGoogleError = () => {
-    console.log('Google Login Failed')
-    alert('Google login failed. Please try again.')
-  }
+    toast.error('Google login failed. Please try again.');
+  };
 
   return (
     <div className="min-h-[calc(100vh-16rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
@@ -156,7 +167,7 @@ const Login = () => {
           </p>
         </div>
 
-        {/* Security Notice for Admin */}
+        {/* Security Notice for MFA */}
         {mfaRequired && (
           <div className="bg-blue-50 border border-blue-200 p-4 rounded-md">
             <div className="flex items-center">
@@ -167,7 +178,7 @@ const Login = () => {
                 </h3>
                 <p className="text-sm text-blue-700 mt-1">
                   {mfaSetupRequired 
-                    ? 'Please set up two-factor authentication to secure your admin account.'
+                    ? 'Please set up two-factor authentication to secure your account.'
                     : 'Please enter your two-factor authentication code to continue.'
                   }
                 </p>
@@ -176,9 +187,12 @@ const Login = () => {
           </div>
         )}
 
-        {error && (
-          <div className="text-red-600 text-sm text-center font-medium">
-            {error}
+        {/* Display error from AuthContext if not MFA related */}
+        {error && !mfaRequired && (
+          <div className="bg-red-50 border border-red-200 p-4 rounded-md">
+            <div className="text-red-800 text-sm font-medium">
+              {error}
+            </div>
           </div>
         )}
 
@@ -336,13 +350,13 @@ const Login = () => {
 
       {/* MFA Modals */}
       {showMfaSetup && (
-  <MFASetupModal
-    isOpen={showMfaSetup}
-    onClose={() => setShowMfaSetup(false)}
-    onComplete={handleMfaSetupComplete}
-    credentials={tempCredentials} // Make sure this contains email and password
-  />
-)}
+        <MFASetupModal
+          isOpen={showMfaSetup}
+          onClose={() => setShowMfaSetup(false)}
+          onComplete={handleMfaSetupComplete}
+          credentials={tempCredentials}
+        />
+      )}
 
       {showMfaVerification && (
         <MFAVerificationModal

@@ -2,15 +2,12 @@ const API_BASE_URL = 'http://localhost:8001/api/jobs';
 const USERS_API_URL = 'http://localhost:8000/api/auth';
 
 const getAuthToken = () => {
-  const token = localStorage.getItem('access_token');
-  console.log('Getting auth token:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
-  return token;
+  return localStorage.getItem('access_token');
 };
 
 const getAuthHeaders = () => {
   const token = getAuthToken();
   if (!token) {
-    console.error('No access token found in localStorage');
     throw new Error('No authentication token found. Please log in again.');
   }
   
@@ -22,38 +19,28 @@ const getAuthHeaders = () => {
 
 const apiCall = async (url, method = 'GET', data = null, isFormData = false) => {
   try {
-    console.log(`Making ${method} request to:`, url);
-    
     const headers = isFormData ? 
       { 'Authorization': `Bearer ${getAuthToken()}` } : 
       getAuthHeaders();
-
-    console.log('Request headers:', headers);
 
     const config = { method, headers };
     
     if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
       config.body = isFormData ? data : JSON.stringify(data);
-      console.log('Request body:', isFormData ? 'FormData' : data);
     }
 
     const response = await fetch(url, config);
-    
-    console.log('Response status:', response.status);
-    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
     
     if (!response.ok) {
       let errorData = {};
       try {
         errorData = await response.json();
-        console.log('Error response data:', errorData);
       } catch (e) {
-        console.log('Could not parse error response as JSON');
+        // Continue with default error handling
       }
       
       // Handle specific error cases
       if (response.status === 401) {
-        console.error('Authentication failed - token may be expired or invalid');
         throw new Error('Your session has expired. Please log in again.');
       } else if (response.status === 403) {
         throw new Error('You do not have permission to perform this action.');
@@ -67,11 +54,8 @@ const apiCall = async (url, method = 'GET', data = null, isFormData = false) => 
       throw new Error(errorMessage);
     }
 
-    const responseData = method === 'DELETE' ? true : await response.json();
-    console.log('Success response:', responseData);
-    return responseData;
+    return method === 'DELETE' ? true : await response.json();
   } catch (err) {
-    console.error('API Error:', err);
     throw err;
   }
 };
@@ -98,7 +82,6 @@ export const jobsApi = {
   getMyJobs: () => apiCall(`${API_BASE_URL}/client/jobs/`),
   
   createJob: (data) => {
-    console.log('Creating job with data:', data);
     return apiCall(`${API_BASE_URL}/client/jobs/create/`, 'POST', data);
   },
   
@@ -119,12 +102,43 @@ export const jobsApi = {
   withdrawApplication: (applicationId) => apiCall(`${API_BASE_URL}/applications/${applicationId}/withdraw/`, 'POST'),
 
   // File uploads
-  uploadJobAttachment: async (jobId, file, description = '') => {
-    const formData = new FormData();
-    formData.append('file', file);
+  // Fix the uploadJobAttachment function
+uploadJobAttachment: async (jobId, file, description = '') => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (description) {
     formData.append('description', description);
-    return apiCall(`${API_BASE_URL}/client/jobs/${jobId}/attachments/`, 'POST', formData, true);
-  },
+  }
+  
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('No authentication token found');
+  }
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/client/jobs/${jobId}/attachments/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Don't set Content-Type header - browser will set it with boundary
+      },
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || errorData.error || 'Failed to upload attachment');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Upload error:', error);
+    throw error;
+  }
+}
+
+
+,
 
   deleteJobAttachment: (jobId, attachmentId) => 
     apiCall(`${API_BASE_URL}/client/jobs/${jobId}/attachments/${attachmentId}/`, 'DELETE'),
@@ -162,7 +176,7 @@ export const jobsApi = {
   // Advanced features
   reportJob: (jobId, reason) => 
     apiCall(`${API_BASE_URL}/${jobId}/report/`, 'POST', { reason }),
-  getRelatedJobs: (jobId) => apiCall(`${API_BASE_URL}/${jobId}/`),
+  getRelatedJobs: (jobId) => apiCall(`${API_BASE_URL}/${jobId}/related/`),
   getRecommendedJobs: () => apiCall(`${API_BASE_URL}/recommended/`),
 
   // Admin operations (if user has admin access)

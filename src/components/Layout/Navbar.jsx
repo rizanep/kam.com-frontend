@@ -7,14 +7,13 @@ import {
   MessageSquare as MessageSquareIcon,
   User as UserIcon,
   LogOut,
-  Briefcase,
   Search,
   Plus,
   FileText,
-  Bookmark,
   Settings,
   ChevronDown,
-  Shield
+  Shield,
+  Briefcase
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -33,72 +32,52 @@ const Navbar = () => {
   const isFreelancer = accountTypes.includes('freelancer') || userRole === 'freelancer'
   const isAdmin = accountTypes.includes('admin') || userRole === 'admin' || user?.is_staff
 
-  // Resolve profile route dynamically
-  const profileRoute = '/profile'
-
-  // Navigation items based on user roles
+  // Simplified navigation items
   const getNavigationItems = () => {
     if (!isAuthenticated) return []
 
-    const items = []
+    const items = [
+      {
+        to: '/jobs',
+        label: 'Browse Jobs',
+        icon: Search,
+        active: location.pathname.startsWith('/jobs')
+      }
+    ]
 
-    // Jobs Portal - Always available for authenticated users
-    items.push({
-      to: '/jobs',
-      label: 'Browse Jobs',
-      icon: Search,
-      active: location.pathname.startsWith('/jobs')
-    })
-
-    // Client-specific items
+    // Role-specific dashboard
     if (isClient) {
-      items.push(
-        {
-          to: '/client/dashboard',
-          label: 'Client Dashboard',
-          icon: Briefcase,
-          active: location.pathname.includes('/client/dashboard')
-        },
-        {
-          to: '/freelancer/post-jobs',
-          label: 'Post Job',
-          icon: Plus,
-          active: location.pathname.includes('/post-job')
-        },
-    {
-  to: '/jobs?view=my-jobs',  // Changed from '/client/my-jobs'
-  label: 'My Jobs',
-  icon: FileText,
-  active: location.pathname.includes('/jobs') && new URLSearchParams(location.search).get('view') === 'my-jobs'
-}
-      )
+      items.push({
+        to: '/client/dashboard',
+        label: 'Dashboard',
+        icon: Briefcase,
+        active: location.pathname.includes('/client/dashboard')
+      })
+    } else if (isFreelancer) {
+      items.push({
+        to: '/freelancer/dashboard',
+        label: 'Dashboard',
+        icon: Briefcase,
+        active: location.pathname.includes('/freelancer/dashboard')
+      })
     }
 
-    // Freelancer-specific items
-    if (isFreelancer) {
-      items.push(
-        {
-          to: '/freelancer/dashboard',
-          label: 'Freelancer Dashboard',
-          icon: Briefcase,
-          active: location.pathname.includes('/freelancer/dashboard')
-        },
-        {
-          to: '/jobs?view=saved',
-          label: 'Saved Jobs',
-          icon: Bookmark,
-          active: location.pathname.includes('/saved')
-        }
-      )
-    }
-
-    // Admin-specific items
     if (isAdmin) {
       items.push({
         to: '/admin/dashboard',
-        label: 'Admin Panel',
+        label: 'Admin',
         icon: Shield,
         active: location.pathname.includes('/admin/dashboard')
+      })
+    }
+
+    // Quick actions
+    if (isClient || isFreelancer) {
+      items.push({
+        to: '/jobs/post',
+        label: 'Post Job',
+        icon: Plus,
+        active: location.pathname.includes('/jobs/post')
       })
     }
 
@@ -126,6 +105,36 @@ const Navbar = () => {
     if (isClient) return 'Client'
     if (isFreelancer) return 'Freelancer'
     return 'Member'
+  }
+
+  // User dropdown menu items
+  const userMenuItems = [
+    { to: '/profile', label: 'Profile', icon: UserIcon },
+    { to: '/user/resetpass', label: 'Settings', icon: Settings },
+  ]
+
+  // Role-specific menu items
+  if (isFreelancer) {
+    userMenuItems.unshift({
+      to: '/freelancer/proposals',
+      label: 'My Proposals',
+      icon: FileText
+    })
+  }
+
+  if (isClient) {
+    userMenuItems.unshift(
+      {
+        to: '/client/my-jobs',
+        label: 'My Jobs',
+        icon: FileText
+      },
+      {
+        to: '/client/proposals',
+        label: 'Manage Proposals',
+        icon: FileText
+      }
+    )
   }
 
   return (
@@ -161,7 +170,7 @@ const Navbar = () => {
             ) : (
               <>
                 {/* Main Navigation Items */}
-                {navigationItems.slice(0, 4).map((item) => {
+                {navigationItems.map((item) => {
                   const Icon = item.icon
                   return (
                     <Link
@@ -178,42 +187,6 @@ const Navbar = () => {
                     </Link>
                   )
                 })}
-
-                {/* More menu for additional items */}
-                {navigationItems.length > 4 && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowUserMenu(!showUserMenu)}
-                      className="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50"
-                    >
-                      More
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
-                    
-                    {showUserMenu && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
-                        {navigationItems.slice(4).map((item) => {
-                          const Icon = item.icon
-                          return (
-                            <Link
-                              key={item.to}
-                              to={item.to}
-                              className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                                item.active
-                                  ? 'text-blue-600 bg-blue-50'
-                                  : 'text-gray-700 hover:bg-gray-50'
-                              }`}
-                              onClick={() => setShowUserMenu(false)}
-                            >
-                              <Icon className="h-4 w-4" />
-                              {item.label}
-                            </Link>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -221,21 +194,21 @@ const Navbar = () => {
           {/* User Menu (Desktop) */}
           {isAuthenticated && (
             <div className="hidden md:flex items-center space-x-3">
-              {/* Notifications */}
-              <Link
-                to="/notifications"
-                className="p-2 rounded-full text-gray-500 hover:text-blue-600 focus:outline-none relative transition-colors"
-              >
-                <BellIcon className="h-5 w-5" />
-                <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-              </Link>
-
               {/* Messages */}
               <Link
                 to="/messages"
                 className="p-2 rounded-full text-gray-500 hover:text-blue-600 focus:outline-none relative transition-colors"
               >
                 <MessageSquareIcon className="h-5 w-5" />
+                <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+              </Link>
+
+              {/* Notifications */}
+              <Link
+                to="/notifications"
+                className="p-2 rounded-full text-gray-500 hover:text-blue-600 focus:outline-none relative transition-colors"
+              >
+                <BellIcon className="h-5 w-5" />
                 <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
               </Link>
 
@@ -248,9 +221,7 @@ const Navbar = () => {
                   <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
                     {user?.profile_picture ? (
                       <img
-                        src={user.profile_picture.startsWith('http') 
-                          ? user.profile_picture 
-                          : `http://localhost:8000${user.profile_picture}`}
+                        src={`http://localhost:8000/${user.profile_picture}`}
                         alt="Profile"
                         className="h-8 w-8 rounded-full object-cover"
                       />
@@ -278,23 +249,20 @@ const Navbar = () => {
                       <p className="text-xs text-blue-600 mt-1">{getUserRoleDisplay()}</p>
                     </div>
                     
-                    <Link
-                      to={profileRoute}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      onClick={() => setShowUserMenu(false)}
-                    >
-                      <UserIcon className="h-4 w-4 mr-2" />
-                      Profile
-                    </Link>
-                    
-                    <Link
-                      to="/user/resetpass"
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      onClick={() => setShowUserMenu(false)}
-                    >
-                      <Settings className="h-4 w-4 mr-2" />
-                      Settings
-                    </Link>
+                    {userMenuItems.map((item) => {
+                      const Icon = item.icon
+                      return (
+                        <Link
+                          key={item.to}
+                          to={item.to}
+                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          onClick={() => setShowUserMenu(false)}
+                        >
+                          <Icon className="h-4 w-4 mr-2" />
+                          {item.label}
+                        </Link>
+                      )
+                    })}
                     
                     <div className="border-t border-gray-100"></div>
                     
@@ -350,6 +318,7 @@ const Navbar = () => {
               </>
             ) : (
               <>
+                {/* Main Navigation */}
                 {navigationItems.map((item) => {
                   const Icon = item.icon
                   return (
@@ -372,6 +341,16 @@ const Navbar = () => {
                 {/* Mobile User Actions */}
                 <div className="border-t border-gray-200 pt-3 mt-3">
                   <Link
+                    to="/messages"
+                    className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-100 transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <MessageSquareIcon className="h-5 w-5" />
+                    Messages
+                    <span className="ml-auto w-2 h-2 bg-red-500 rounded-full"></span>
+                  </Link>
+
+                  <Link
                     to="/notifications"
                     className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-100 transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -381,33 +360,20 @@ const Navbar = () => {
                     <span className="ml-auto w-2 h-2 bg-red-500 rounded-full"></span>
                   </Link>
                   
-                  <Link
-                    to="/messages"
-                    className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-100 transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <MessageSquareIcon className="h-5 w-5" />
-                    Messages
-                    <span className="ml-auto w-2 h-2 bg-red-500 rounded-full"></span>
-                  </Link>
-                  
-                  <Link
-                    to={profileRoute}
-                    className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-100 transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <UserIcon className="h-5 w-5" />
-                    Profile
-                  </Link>
-                  
-                  <Link
-                    to="/user/resetpass"
-                    className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-100 transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Settings className="h-5 w-5" />
-                    Settings
-                  </Link>
+                  {userMenuItems.map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-100 transition-colors"
+                        onClick={() => setIsOpen(false)}
+                      >
+                        <Icon className="h-5 w-5" />
+                        {item.label}
+                      </Link>
+                    )
+                  })}
                   
                   <button
                     onClick={handleLogout}
@@ -424,9 +390,7 @@ const Navbar = () => {
                     <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
                       {user?.profile_picture ? (
                         <img
-                          src={user.profile_picture.startsWith('http') 
-                            ? user.profile_picture 
-                            : `http://localhost:8000${user.profile_picture}`}
+                          src={ `http://localhost:8000/${user.profile_picture}`}
                           alt="Profile"
                           className="h-10 w-10 rounded-full object-cover"
                         />

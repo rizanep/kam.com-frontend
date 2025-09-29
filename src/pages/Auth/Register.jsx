@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon, CheckCircleIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
 import ReCAPTCHA from "react-google-recaptcha";
+import { toast } from 'react-toastify';
 
 const Register = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const { register } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [userRole, setUserRole] = useState(searchParams.get('role') || '');
@@ -23,8 +23,60 @@ const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedAccountTypes, setSelectedAccountTypes] = useState([]);
 
+  // Helper function to get error message from backend response
+  const getErrorMessage = (error, defaultMessage = 'An error occurred') => {
+    if (error.response?.data) {
+      const data = error.response.data;
+      
+      if (data.error) {
+        return data.error;
+      } else if (data.message) {
+        return data.message;
+      } else if (data.detail) {
+        return data.detail;
+      } else if (data.non_field_errors) {
+        return Array.isArray(data.non_field_errors) 
+          ? data.non_field_errors[0] 
+          : data.non_field_errors;
+      } else if (typeof data === 'string') {
+        return data;
+      }
+    }
+    return error.message || defaultMessage;
+  };
+
+  // Helper function to extract field-specific errors from backend
+  const extractFieldErrors = (error) => {
+    const fieldErrors = {};
+    if (error.response?.data) {
+      const data = error.response.data;
+      
+      // Map backend field errors to form fields
+      if (data.email) {
+        fieldErrors.email = Array.isArray(data.email) ? data.email[0] : data.email;
+      }
+      if (data.password) {
+        fieldErrors.password = Array.isArray(data.password) ? data.password[0] : data.password;
+      }
+      if (data.username) {
+        fieldErrors.username = Array.isArray(data.username) ? data.username[0] : data.username;
+      }
+      if (data.account_types) {
+        fieldErrors.account_types = Array.isArray(data.account_types) ? data.account_types[0] : data.account_types;
+      }
+      if (data.recaptcha) {
+        fieldErrors.recaptcha = Array.isArray(data.recaptcha) ? data.recaptcha[0] : data.recaptcha;
+      }
+    }
+    return fieldErrors;
+  };
+
   const handleRecaptchaChange = (token) => {
     setRecaptchaToken(token);
+    // Clear recaptcha error when user completes it
+    if (errors.recaptcha) {
+      setErrors(prev => ({ ...prev, recaptcha: '' }));
+    }
   };
 
   const handleInputChange = (e) => {
@@ -34,17 +86,24 @@ const Register = () => {
       [name]: value,
     });
     
+    // Clear field error when user starts typing
     if (errors[name]) {
-      setErrors({
-        ...errors,
+      setErrors(prev => ({
+        ...prev,
         [name]: '',
-      });
+      }));
     }
   };
 
   const handleRoleSelect = (role) => {
     setUserRole(role);
     setSelectedAccountTypes([role]);
+    
+    // Clear account type error when user selects a role
+    if (errors.account_types) {
+      setErrors(prev => ({ ...prev, account_types: '' }));
+    }
+    
     if (formData.email) {
       const username = formData.email.split('@')[0];
       setFormData(prev => ({
@@ -56,6 +115,7 @@ const Register = () => {
 
   const validateForm = () => {
     const newErrors = {};
+    
     if (!formData.email) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
@@ -74,6 +134,10 @@ const Register = () => {
       newErrors.account_types = 'Please select a role';
     }
 
+    if (!recaptchaToken) {
+      newErrors.recaptcha = 'Please complete the reCAPTCHA';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -81,9 +145,8 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
-    if (!recaptchaToken) {
-      alert("Please complete the reCAPTCHA");
+    if (!validateForm()) {
+      toast.error('Please fix the errors in the form');
       return;
     }
 
@@ -100,21 +163,23 @@ const Register = () => {
 
       console.log('Registration data:', registrationData);
       await register(registrationData);
+      // Success toast is handled in AuthContext
 
     } catch (error) {
       console.error('Registration failed:', error);
-      if (error.response?.data) {
-        const backendErrors = error.response.data;
-        setErrors(backendErrors);
-        if (backendErrors.non_field_errors) {
-          alert(backendErrors.non_field_errors.join(', '));
-        } else if (backendErrors.email) {
-          alert(backendErrors.email.join(', '));
-        } else if (backendErrors.account_types) {
-          alert(backendErrors.account_types.join(', '));
-        }
+      
+      // Extract field-specific errors
+      const fieldErrors = extractFieldErrors(error);
+      setErrors(fieldErrors);
+      
+      // If there are no field-specific errors, show general error message
+      if (Object.keys(fieldErrors).length === 0) {
+        const generalError = getErrorMessage(error, 'Registration failed. Please try again.');
+        toast.error(generalError);
       } else {
-        alert('Registration failed. Please try again.');
+        // Show toast for first field error
+        const firstError = Object.values(fieldErrors)[0];
+        toast.error(firstError);
       }
     } finally {
       setIsLoading(false);
@@ -130,20 +195,22 @@ const Register = () => {
 
   const handleGoogleSuccess = async (credentialResponse) => {
     if (!userRole || selectedAccountTypes.length === 0) {
-      alert('Please select a role first (Hire a Freelancer or Work as a Freelancer)');
+      toast.error('Please select a role first (Hire a Freelancer or Work as a Freelancer)');
       return;
     }
 
     setIsLoading(true);
     try {
       const res = await axios.post(
-        'http://localhost:8000/api/auth/google/',
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/auth/google/`,
         { 
           credential: credentialResponse.credential,
           account_types: selectedAccountTypes
         },
         { headers: { 'Content-Type': 'application/json' } }
       );
+
+      toast.success('Google registration successful!');
 
       localStorage.setItem('access_token', res.data.access);
       localStorage.setItem('refresh_token', res.data.refresh);
@@ -159,8 +226,8 @@ const Register = () => {
       }
     } catch (err) {
       console.error('Google registration failed:', err);
-      const errorMessage = err.response?.data?.error || 'Google registration failed. Please try again.';
-      alert(errorMessage);
+      const errorMessage = getErrorMessage(err, 'Google registration failed. Please try again.');
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -168,7 +235,7 @@ const Register = () => {
 
   const handleGoogleError = () => {
     console.log('Google Registration Failed');
-    alert('Google registration failed. Please try again.');
+    toast.error('Google registration failed. Please try again.');
   };
 
   return (
@@ -198,7 +265,11 @@ const Register = () => {
             <button
               type="button"
               onClick={() => handleRoleSelect("client")}
-              className={`relative flex flex-col items-center justify-center p-4 rounded-lg border ${userRole === 'client' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-200 hover:bg-blue-50'}`}
+              className={`relative flex flex-col items-center justify-center p-4 rounded-lg border ${
+                userRole === 'client' 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-200 hover:border-blue-200 hover:bg-blue-50'
+              }`}
             >
               {userRole === 'client' && (
                 <div className="absolute top-2 right-2">
@@ -219,7 +290,11 @@ const Register = () => {
             <button
               type="button"
               onClick={() => handleRoleSelect('freelancer')}
-              className={`relative flex flex-col items-center justify-center p-4 rounded-lg border ${userRole === 'freelancer' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-200 hover:bg-blue-50'}`}
+              className={`relative flex flex-col items-center justify-center p-4 rounded-lg border ${
+                userRole === 'freelancer' 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-200 hover:border-blue-200 hover:bg-blue-50'
+              }`}
             >
               {userRole === 'freelancer' && (
                 <div className="absolute top-2 right-2">
@@ -272,7 +347,9 @@ const Register = () => {
           {/* Email & Password */}
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email address</label>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Email address
+              </label>
               <input
                 id="email"
                 name="email"
@@ -280,13 +357,18 @@ const Register = () => {
                 required
                 value={formData.email}
                 onChange={handleInputChange}
-                className={`shadow-sm mt-1 appearance-none relative block w-full px-3 py-2 border rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${errors.email ? 'border-red-300' : 'border-gray-300'}`}
+                className={`shadow-sm mt-1 appearance-none relative block w-full px-3 py-2 border rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.email ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="Enter your email"
               />
               {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Password
+              </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <input
                   id="password"
@@ -295,7 +377,9 @@ const Register = () => {
                   required
                   value={formData.password}
                   onChange={handleInputChange}
-                  className={`appearance-none relative block w-full px-3 py-2 border rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${errors.password ? 'border-red-300' : 'border-gray-300'}`}
+                  className={`appearance-none relative block w-full px-3 py-2 border rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.password ? 'border-red-300' : 'border-gray-300'
+                  }`}
                   placeholder="At least 8 characters"
                 />
                 <button
@@ -310,14 +394,24 @@ const Register = () => {
                   )}
                 </button>
               </div>
-              <p className="mt-1 text-xs text-gray-500">Must contain at least 8 characters, including a number and a special character.</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Must contain at least 8 characters, including uppercase, lowercase, number and special character.
+              </p>
               {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
             </div>
           </div>
-{/* reCAPTCHA */}
+
+          {/* reCAPTCHA */}
           <div className="flex justify-center my-4">
-            <ReCAPTCHA sitekey="6LcxH8MrAAAAAEJQdX6E7UtbjTZxE8RTlTBcEuv3" onChange={handleRecaptchaChange} />
+            <ReCAPTCHA 
+              sitekey="6LcxH8MrAAAAAEJQdX6E7UtbjTZxE8RTlTBcEuv3" 
+              onChange={handleRecaptchaChange} 
+            />
           </div>
+          {errors.recaptcha && (
+            <p className="mt-1 text-sm text-red-600 text-center">{errors.recaptcha}</p>
+          )}
+
           {/* Terms */}
           <div className="flex items-center">
             <input
@@ -329,18 +423,25 @@ const Register = () => {
             />
             <label htmlFor="terms" className="ml-2 block text-sm text-gray-900">
               I agree to the{' '}
-              <Link to="/terms" className="text-blue-600 hover:text-blue-500">Terms of Service</Link> and{' '}
-              <Link to="/privacy" className="text-blue-600 hover:text-blue-500">Privacy Policy</Link>
+              <Link to="/terms" className="text-blue-600 hover:text-blue-500">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link to="/privacy" className="text-blue-600 hover:text-blue-500">
+                Privacy Policy
+              </Link>
             </label>
           </div>
-
-          
 
           <div>
             <button
               type="submit"
               disabled={!userRole || isLoading}
-              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white ${userRole && !isLoading ? 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500' : 'bg-gray-300 cursor-not-allowed'}`}
+              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white ${
+                userRole && !isLoading 
+                  ? 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500' 
+                  : 'bg-gray-300 cursor-not-allowed'
+              }`}
             >
               {isLoading ? 'Creating account...' : 'Create account'}
             </button>

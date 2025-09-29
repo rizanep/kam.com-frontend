@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 
 // Create axios instance with base configuration
 const api = axios.create({
@@ -40,7 +41,7 @@ api.interceptors.response.use(
           localStorage.setItem('access_token', access);
           originalRequest.headers.Authorization = `Bearer ${access}`;
           
-          return api(originalRequest); // retry with new token
+          return api(originalRequest);
         }
       } catch (refreshError) {
         // Token refresh failed, clear storage and redirect to login
@@ -51,6 +52,7 @@ api.interceptors.response.use(
         if (currentPath !== '/login' && currentPath !== '/register' && currentPath !== '/') {
           sessionStorage.setItem('redirectAfterLogin', currentPath);
         }
+        toast.error('Session expired. Please login again.');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
@@ -79,9 +81,36 @@ export const AuthProvider = ({ children }) => {
   // Helper function to get primary account type for navigation
   const getPrimaryAccountType = (accountTypes) => {
     if (!Array.isArray(accountTypes) || accountTypes.length === 0) {
-      return 'freelancer'; // default fallback
+      return 'freelancer';
     }
-    return accountTypes[0]; // Use first account type as primary
+    return accountTypes[0];
+  };
+
+  // Helper function to extract error message from backend response
+  const getErrorMessage = (error, defaultMessage = 'An error occurred') => {
+    if (error.response?.data) {
+      const data = error.response.data;
+      
+      // Check for different error formats
+      if (data.error) {
+        return data.error;
+      } else if (data.message) {
+        return data.message;
+      } else if (data.detail) {
+        return data.detail;
+      } else if (data.non_field_errors) {
+        return Array.isArray(data.non_field_errors) 
+          ? data.non_field_errors[0] 
+          : data.non_field_errors;
+      } else if (typeof data === 'string') {
+        return data;
+      } else {
+        // Extract first error from object
+        const firstError = Object.values(data)[0];
+        return Array.isArray(firstError) ? firstError[0] : firstError;
+      }
+    }
+    return error.message || defaultMessage;
   };
 
   // Check if user is authenticated on app load
@@ -119,118 +148,62 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   };
-// In your AuthContext.js, update the login function:
 
-const login = async (email, password) => {
-  try {
-    setError(null);
-    const response = await api.post('/auth/login/', { email, password });
+  const login = async (email, password) => {
+    try {
+      setError(null);
+      const response = await api.post('/auth/login/', { email, password });
 
-    // Check if MFA is required
-    if (response.data.mfa_required) {
-      // Don't proceed with normal login flow
-      // Instead, throw an error that contains the MFA response
-      const mfaError = new Error('MFA Required');
-      mfaError.response = { data: response.data };
-      throw mfaError;
-    }
+      // Check if MFA is required
+      if (response.data.mfa_required) {
+        const mfaError = new Error('MFA Required');
+        mfaError.response = { data: response.data };
+        throw mfaError;
+      }
 
-    const { access, refresh, user: userData } = response.data;
+      const { access, refresh, user: userData } = response.data;
 
-    // Store tokens
-    localStorage.setItem('access_token', access);
-    localStorage.setItem('refresh_token', refresh);
+      // Store tokens
+      localStorage.setItem('access_token', access);
+      localStorage.setItem('refresh_token', refresh);
 
-    // Set user data
-    setUser(userData);
-
-    // Redirect logic using account types array
-    const redirectPath = sessionStorage.getItem('redirectAfterLogin');
-    if (redirectPath) {
-      sessionStorage.removeItem('redirectAfterLogin');
-      navigate(redirectPath);
-    } else {
-      // Use primary account type for navigation
-      const primaryAccountType = getPrimaryAccountType(userData.account_types);
+      // Set user data
+      setUser(userData);
       
-      if (primaryAccountType === 'client') {
-        navigate('/client/dashboard');
-      } else if (primaryAccountType === 'admin') {
-        navigate('/admin/dashboard');
+      // Show success toast
+      toast.success('Login successful!');
+
+      // Redirect logic using account types array
+      const redirectPath = sessionStorage.getItem('redirectAfterLogin');
+      if (redirectPath) {
+        sessionStorage.removeItem('redirectAfterLogin');
+        navigate(redirectPath);
       } else {
-        navigate('/freelancer/dashboard');
-      }
-    }
-
-    return response.data;
-  } catch (error) {
-    let errorMessage = 'Login failed. Please try again.';
-
-    if (error.message === 'MFA Required') {
-      // Re-throw MFA errors to be handled by Login component
-      throw error;
-    }
-
-    if (error.response?.data) {
-      if (error.response.data.non_field_errors) {
-        errorMessage = error.response.data.non_field_errors[0];
-      } else if (error.response.data.detail) {
-        errorMessage = error.response.data.detail;
-      }
-    }
-
-    setError(errorMessage);
-    throw new Error(errorMessage);
-  }
-};
-  // const login = async (email, password) => {
-  //   try {
-  //     setError(null);
-  //     const response = await api.post('/auth/login/', { email, password });
-
-  //     const { access, refresh, user: userData } = response.data;
-
-  //     // Store tokens
-  //     localStorage.setItem('access_token', access);
-  //     localStorage.setItem('refresh_token', refresh);
-
-  //     // Set user data
-  //     setUser(userData);
-
-  //     // Redirect logic using account types array
-  //     const redirectPath = sessionStorage.getItem('redirectAfterLogin');
-  //     if (redirectPath) {
-  //       sessionStorage.removeItem('redirectAfterLogin');
-  //       navigate(redirectPath);
-  //     } else {
-  //       // Use primary account type for navigation
-  //       const primaryAccountType = getPrimaryAccountType(userData.account_types);
+        // Use primary account type for navigation
+        const primaryAccountType = getPrimaryAccountType(userData.account_types);
         
-  //       if (primaryAccountType === 'client') {
-  //         navigate('/client/dashboard');
-  //       } else if (primaryAccountType === 'admin') {
-  //         navigate('/admin/dashboard');
-  //       } else {
-  //         navigate('/freelancer/dashboard');
-  //       }
-  //     }
+        if (primaryAccountType === 'client') {
+          navigate('/client/dashboard');
+        } else if (primaryAccountType === 'admin') {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/freelancer/dashboard');
+        }
+      }
 
-  //     return response.data;
-  //   } catch (error) {
-  //     let errorMessage = 'Login failed. Please try again.';
+      return response.data;
+    } catch (error) {
+      if (error.message === 'MFA Required') {
+        // Re-throw MFA errors to be handled by Login component
+        throw error;
+      }
 
-  //     if (error.response?.data) {
-  //       if (error.response.data.non_field_errors) {
-  //         errorMessage = error.response.data.non_field_errors[0];
-  //       } else if (error.response.data.detail) {
-  //         errorMessage = error.response.data.detail;
-  //       }
-  //     }
-
-  //     setError(errorMessage);
-  //     throw new Error(errorMessage);
-  //   }
-  // };
+      const errorMessage = getErrorMessage(error, 'Login failed. Please try again.');
+      setError(errorMessage);
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
+    }
+  };
 
   const register = async (userData) => {
     try {
@@ -248,6 +221,9 @@ const login = async (email, password) => {
       // Set user data
       setUser(newUser);
       
+      // Show success toast
+      toast.success('Account created successfully!');
+
       // Redirect based on primary account type
       const primaryAccountType = getPrimaryAccountType(newUser.account_types);
       
@@ -261,28 +237,11 @@ const login = async (email, password) => {
 
       return response.data;
     } catch (error) {
-      let errorMessage = 'Registration failed. Please try again.';
-      
       console.error('Registration error:', error.response?.data);
       
-      if (error.response?.data) {
-        // Handle Django validation errors for new API structure
-        if (error.response.data.email) {
-          errorMessage = error.response.data.email[0];
-        } else if (error.response.data.password) {
-          errorMessage = error.response.data.password[0];
-        } else if (error.response.data.account_types) {
-          errorMessage = error.response.data.account_types[0];
-        } else if (error.response.data.non_field_errors) {
-          errorMessage = error.response.data.non_field_errors[0];
-        } else if (typeof error.response.data === 'object') {
-          // Extract first error message from object
-          const firstError = Object.values(error.response.data)[0];
-          errorMessage = Array.isArray(firstError) ? firstError[0] : firstError;
-        }
-      }
-      
+      const errorMessage = getErrorMessage(error, 'Registration failed. Please try again.');
       setError(errorMessage);
+      toast.error(errorMessage);
       throw new Error(errorMessage);
     }
   };
@@ -293,6 +252,7 @@ const login = async (email, password) => {
     sessionStorage.removeItem('redirectAfterLogin');
     setUser(null);
     setError(null);
+    toast.success('Logged out successfully');
     navigate('/login');
   };
 
@@ -312,6 +272,8 @@ const login = async (email, password) => {
       return response.data;
     } catch (error) {
       console.error('Failed to refresh user data:', error);
+      const errorMessage = getErrorMessage(error, 'Failed to refresh user data');
+      toast.error(errorMessage);
       throw error;
     }
   };
@@ -353,7 +315,7 @@ const login = async (email, password) => {
     updateUser,
     clearError,
     refreshUserData,
-    api, // Export the configured axios instance
+    api,
     // Helper functions for account type checking
     hasAccountType,
     getPrimaryUserAccountType,

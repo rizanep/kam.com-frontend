@@ -1,13 +1,16 @@
+// src/components/Jobs/JobApplicationPage.jsx
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, DollarSign, Clock, FileText, Upload, X, 
-  Send, AlertCircle, CheckCircle, User, Star
+  Send, AlertCircle, CheckCircle, User, Star,
+  Download, Briefcase, Calendar
 } from 'lucide-react';
 import { useJobs } from '../../context/JobContext';
 import { jobsApi } from '../../services/jobsApi';
+import { bidsApiService } from '../../services/bidsApi';
 
 const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
-  const { applyToJob } = useJobs();
+  const { user } = useJobs();
   const [jobData, setJobData] = useState(job);
   const [loading, setLoading] = useState(!job);
   const [submitting, setSubmitting] = useState(false);
@@ -15,19 +18,25 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
   const [success, setSuccess] = useState('');
 
   const [formData, setFormData] = useState({
-    cover_letter: '',
-    bid_amount: '',
-    delivery_time: '',
-    portfolio_items: [],
-    attachments: []
+    proposal: '',
+    amount: '',
+    hourly_rate: '',
+    estimated_hours: '',
+    estimated_delivery: '',
+    bid_type: 'fixed',
+    questions: [],
+    milestones: []
   });
 
   const [attachments, setAttachments] = useState([]);
   const [dragActive, setDragActive] = useState(false);
+  const [milestones, setMilestones] = useState([]);
 
   useEffect(() => {
     if (!job && jobId) {
       loadJobData();
+    } else if (job) {
+      initializeFormData(job);
     }
   }, [job, jobId]);
 
@@ -36,24 +45,25 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
       setLoading(true);
       const data = await jobsApi.getJob(jobId);
       setJobData(data);
-      
-      // Set initial bid amount based on job budget
-      if (data.job_type === 'hourly' && data.hourly_rate_min) {
-        setFormData(prev => ({ 
-          ...prev, 
-          bid_amount: data.hourly_rate_min.toString() 
-        }));
-      } else if (data.budget_min) {
-        setFormData(prev => ({ 
-          ...prev, 
-          bid_amount: data.budget_min.toString() 
-        }));
-      }
+      initializeFormData(data);
     } catch (err) {
       setError('Failed to load job details: ' + err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const initializeFormData = (jobData) => {
+    const bidType = jobData.job_type || 'fixed';
+    
+    setFormData(prev => ({
+      ...prev,
+      bid_type: bidType,
+      amount: bidType === 'fixed' ? (jobData.budget_min || '').toString() : '',
+      hourly_rate: bidType === 'hourly' ? (jobData.hourly_rate_min || '').toString() : '',
+      estimated_hours: bidType === 'hourly' ? '40' : '',
+      estimated_delivery: '14'
+    }));
   };
 
   const handleInputChange = (field, value) => {
@@ -69,12 +79,13 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'image/jpeg', 
         'image/png', 
-        'image/gif'
+        'image/gif',
+        'text/plain'
       ];
       const maxSize = 10 * 1024 * 1024; // 10MB
       
       if (!validTypes.includes(file.type)) {
-        setError(`File "${file.name}" has an invalid type. Please upload PDF, DOC, DOCX, JPG, PNG, or GIF files.`);
+        setError(`File "${file.name}" has an invalid type. Please upload PDF, DOC, DOCX, JPG, PNG, GIF, or TXT files.`);
         return false;
       }
       
@@ -109,37 +120,107 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  const addMilestone = () => {
+    setMilestones(prev => [...prev, {
+      title: '',
+      description: '',
+      amount: '',
+      estimated_delivery_days: '',
+      order: prev.length + 1
+    }]);
+  };
+
+  const updateMilestone = (index, field, value) => {
+    setMilestones(prev => prev.map((milestone, i) => 
+      i === index ? { ...milestone, [field]: value } : milestone
+    ));
+  };
+
+  const removeMilestone = (index) => {
+    setMilestones(prev => prev.filter((_, i) => i !== index)
+      .map((milestone, i) => ({ ...milestone, order: i + 1 })));
+  };
+
   const validateForm = () => {
-    if (!formData.cover_letter.trim()) {
-      setError('Cover letter is required');
+    if (!formData.proposal.trim()) {
+      setError('Proposal is required and must be at least 50 characters');
+      return false;
+    }
+
+    if (formData.proposal.trim().length < 50) {
+      setError('Proposal must be at least 50 characters long');
       return false;
     }
     
-    if (!formData.bid_amount || parseFloat(formData.bid_amount) <= 0) {
-      setError('Please enter a valid bid amount');
-      return false;
+    if (formData.bid_type === 'fixed') {
+      if (!formData.amount || parseFloat(formData.amount) <= 0) {
+        setError('Please enter a valid bid amount');
+        return false;
+      }
+    } else if (formData.bid_type === 'hourly') {
+      if (!formData.hourly_rate || parseFloat(formData.hourly_rate) <= 0) {
+        setError('Please enter a valid hourly rate');
+        return false;
+      }
+      if (!formData.estimated_hours || parseInt(formData.estimated_hours) <= 0) {
+        setError('Please enter valid estimated hours');
+        return false;
+      }
+    } else if (formData.bid_type === 'milestone') {
+      if (milestones.length === 0) {
+        setError('Please add at least one milestone');
+        return false;
+      }
+      
+      const totalMilestoneAmount = milestones.reduce((sum, m) => sum + parseFloat(m.amount || 0), 0);
+      const bidAmount = parseFloat(formData.amount || 0);
+      
+      if (Math.abs(totalMilestoneAmount - bidAmount) > 0.01) {
+        setError('Total milestone amount must equal the bid amount');
+        return false;
+      }
     }
     
-    if (!formData.delivery_time || parseInt(formData.delivery_time) <= 0) {
+    if (!formData.estimated_delivery || parseInt(formData.estimated_delivery) <= 0) {
       setError('Please enter a valid delivery time');
       return false;
     }
 
-    // Validate bid amount against job budget
-    const bidAmount = parseFloat(formData.bid_amount);
+    // Validate against job constraints
+    const amount = parseFloat(formData.amount || formData.hourly_rate);
     if (jobData.job_type === 'hourly') {
-      if (jobData.hourly_rate_max && bidAmount > jobData.hourly_rate_max) {
+      if (jobData.hourly_rate_max && amount > jobData.hourly_rate_max) {
         setError(`Hourly rate cannot exceed $${jobData.hourly_rate_max}`);
         return false;
       }
     } else {
-      if (jobData.budget_max && bidAmount > jobData.budget_max) {
+      if (jobData.budget_max && amount > jobData.budget_max) {
         setError(`Bid amount cannot exceed $${jobData.budget_max}`);
         return false;
       }
     }
     
     return true;
+  };
+
+  const downloadAttachment = async (url, filename) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Download failed');
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error('Error downloading file:', err);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -151,24 +232,65 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
     setError('');
     
     try {
-      const applicationData = new FormData();
-      applicationData.append('cover_letter', formData.cover_letter);
-      applicationData.append('bid_amount', formData.bid_amount);
-      applicationData.append('delivery_time', formData.delivery_time);
-      
-      // Add attachments
-      attachments.forEach((file, index) => {
-        applicationData.append(`attachments`, file);
-      });
+      // Prepare bid data
+      const bidData = {
+        job_id: jobData.id,
+        bid_type: formData.bid_type,
+        proposal: formData.proposal.trim(),
+        estimated_delivery: parseInt(formData.estimated_delivery),
+        currency: 'USD'
+      };
 
-      await applyToJob(jobData.id, applicationData);
+      // Add type-specific data
+      if (formData.bid_type === 'fixed') {
+        bidData.amount = parseFloat(formData.amount);
+      } else if (formData.bid_type === 'hourly') {
+        bidData.hourly_rate = parseFloat(formData.hourly_rate);
+        bidData.estimated_hours = parseInt(formData.estimated_hours);
+      } else if (formData.bid_type === 'milestone') {
+        bidData.amount = parseFloat(formData.amount);
+        bidData.milestones = milestones.map(m => ({
+          title: m.title,
+          description: m.description,
+          amount: parseFloat(m.amount),
+          estimated_delivery_days: parseInt(m.estimated_delivery_days),
+          order: m.order
+        }));
+      }
+
+      // Add questions if any
+      if (formData.questions && formData.questions.length > 0) {
+        bidData.questions = formData.questions;
+      }
+
+      // Create the bid
+      const createdBid = await bidsApiService.createBid(bidData);
       
-      setSuccess('Application submitted successfully!');
+      // Upload attachments if any
+      if (attachments.length > 0) {
+        const attachmentFormData = new FormData();
+        attachments.forEach((file, index) => {
+          attachmentFormData.append('file', file);
+          attachmentFormData.append('description', `Attachment ${index + 1}`);
+          attachmentFormData.append('file_type', 'document');
+        });
+
+        try {
+          await bidsApiService.uploadBidAttachment(createdBid.id, attachmentFormData);
+        } catch (attachmentError) {
+          console.error('Failed to upload attachments:', attachmentError);
+          // Don't fail the whole submission for attachment errors
+        }
+      }
+      
+      setSuccess('Application submitted successfully! You can track its status in your dashboard.');
       setTimeout(() => {
         if (onSuccess) onSuccess();
       }, 2000);
     } catch (err) {
-      setError('Failed to submit application: ' + err.message);
+      console.error('Submission error:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to submit application';
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -245,9 +367,19 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
                 {jobData.estimated_duration?.replace('_', ' ') || 'Not specified'}
               </div>
               <div className="flex items-center gap-2">
-                <FileText size={16} />
-                {jobData.applications_count} proposals
+                <Briefcase size={16} />
+                {jobData.job_type?.charAt(0).toUpperCase() + jobData.job_type?.slice(1)} project
               </div>
+              <div className="flex items-center gap-2">
+                <FileText size={16} />
+                {jobData.applications_count || 0} proposals
+              </div>
+              {jobData.deadline && (
+                <div className="flex items-center gap-2">
+                  <Calendar size={16} />
+                  Deadline: {new Date(jobData.deadline).toLocaleDateString()}
+                </div>
+              )}
             </div>
             
             {/* Client Info */}
@@ -277,6 +409,9 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
                       </span>
                     </div>
                   )}
+                  <p className="text-xs text-gray-500">
+                    {jobData.client_info?.jobs_posted || 0} jobs posted
+                  </p>
                 </div>
               </div>
             </div>
@@ -285,7 +420,7 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
             <div className="mt-4 pt-4 border-t border-gray-200">
               <h5 className="font-medium text-gray-900 mb-2">Required Skills</h5>
               <div className="flex flex-wrap gap-1">
-                {jobData.skills?.slice(0, 5).map((skill) => (
+                {jobData.skills?.slice(0, 6).map((skill) => (
                   <span
                     key={skill.id}
                     className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded"
@@ -295,80 +430,274 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
                 ))}
               </div>
             </div>
+
+            {/* Job Attachments */}
+            {jobData.attachments && jobData.attachments.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <h5 className="font-medium text-gray-900 mb-2">Job Attachments</h5>
+                <div className="space-y-2">
+                  {jobData.attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                    >
+                      <div>
+                        <p className="text-xs font-medium text-gray-900">
+                          {attachment.filename}
+                        </p>
+                        {attachment.description && (
+                          <p className="text-xs text-gray-500">
+                            {attachment.description}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() =>
+                          downloadAttachment(attachment.file_url, attachment.filename)
+                        }
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <Download size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Application Form */}
           <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Submit Your Application</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Submit Your Proposal</h2>
             
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Cover Letter */}
+              {/* Bid Type Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cover Letter *
+                  Proposal Type
+                </label>
+                <div className="flex gap-4">
+                  {['fixed', 'hourly', 'milestone'].map((type) => (
+                    <label key={type} className="flex items-center">
+                      <input
+                        type="radio"
+                        value={type}
+                        checked={formData.bid_type === type}
+                        onChange={(e) => handleInputChange('bid_type', e.target.value)}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700 capitalize">
+                        {type === 'fixed' ? 'Fixed Price' : 
+                         type === 'hourly' ? 'Hourly Rate' : 'Milestone Based'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Proposal */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Proposal *
                 </label>
                 <textarea
-                  value={formData.cover_letter}
-                  onChange={(e) => handleInputChange('cover_letter', e.target.value)}
+                  value={formData.proposal}
+                  onChange={(e) => handleInputChange('proposal', e.target.value)}
                   rows={8}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Tell the client why you're the perfect fit for this job..."
+                  placeholder="Describe why you're the perfect fit for this job. Include your approach, relevant experience, and what makes you stand out..."
                   required
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  {formData.cover_letter.length}/2000 characters
+                  {formData.proposal.length}/5000 characters (minimum 50)
                 </p>
               </div>
 
-              {/* Bid Amount and Delivery Time */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Your {jobData.job_type === 'hourly' ? 'Hourly Rate' : 'Bid Amount'} ($) *
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.bid_amount}
-                    onChange={(e) => handleInputChange('bid_amount', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder={jobData.job_type === 'hourly' ? '75' : '1500'}
-                    min="1"
-                    step="0.01"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {jobData.job_type === 'hourly' 
-                      ? `Range: $${jobData.hourly_rate_min || 0} - $${jobData.hourly_rate_max || 'No limit'}`
-                      : `Budget: $${jobData.budget_min || 0} - $${jobData.budget_max || 'No limit'}`
-                    }
-                  </p>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Delivery Time (days) *
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.delivery_time}
-                    onChange={(e) => handleInputChange('delivery_time', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="14"
-                    min="1"
-                    required
-                  />
-                  {jobData.deadline && (
+              {/* Pricing Section */}
+              <div className="space-y-4">
+                {formData.bid_type === 'fixed' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Total Project Cost ($) *
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.amount}
+                      onChange={(e) => handleInputChange('amount', e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="1500"
+                      min="1"
+                      step="0.01"
+                      required
+                    />
                     <p className="text-xs text-gray-500 mt-1">
-                      Deadline: {new Date(jobData.deadline).toLocaleDateString()}
+                      Budget range: ${jobData.budget_min || 0} - ${jobData.budget_max || 'No limit'}
                     </p>
-                  )}
-                </div>
+                  </div>
+                )}
+
+                {formData.bid_type === 'hourly' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Hourly Rate ($) *
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.hourly_rate}
+                        onChange={(e) => handleInputChange('hourly_rate', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="75"
+                        min="1"
+                        step="0.01"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Estimated Hours *
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.estimated_hours}
+                        onChange={(e) => handleInputChange('estimated_hours', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="40"
+                        min="1"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {formData.bid_type === 'milestone' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Total Project Cost ($) *
+                      </label>
+                    </div>
+                    <input
+                      type="number"
+                      value={formData.amount}
+                      onChange={(e) => handleInputChange('amount', e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="1500"
+                      min="1"
+                      step="0.01"
+                      required
+                    />
+                    
+                    <div className="mt-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <h4 className="text-sm font-medium text-gray-700">Milestones</h4>
+                        <button
+                          type="button"
+                          onClick={addMilestone}
+                          className="text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          + Add Milestone
+                        </button>
+                      </div>
+                      
+                      {milestones.map((milestone, index) => (
+                        <div key={index} className="border border-gray-200 rounded-lg p-4 mb-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <h5 className="font-medium">Milestone {index + 1}</h5>
+                            <button
+                              type="button"
+                              onClick={() => removeMilestone(index)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <input
+                                type="text"
+                                placeholder="Milestone title"
+                                value={milestone.title}
+                                onChange={(e) => updateMilestone(index, 'title', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <input
+                                type="number"
+                                placeholder="Amount ($)"
+                                value={milestone.amount}
+                                onChange={(e) => updateMilestone(index, 'amount', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                min="0.01"
+                                step="0.01"
+                                required
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="mt-2">
+                            <textarea
+                              placeholder="Milestone description"
+                              value={milestone.description}
+                              onChange={(e) => updateMilestone(index, 'description', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              rows="2"
+                              required
+                            />
+                          </div>
+                          
+                          <div className="mt-2">
+                            <input
+                              type="number"
+                              placeholder="Delivery time (days)"
+                              value={milestone.estimated_delivery_days}
+                              onChange={(e) => updateMilestone(index, 'estimated_delivery_days', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              min="1"
+                              required
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {milestones.length > 0 && (
+                        <div className="text-sm text-gray-500">
+                          Total milestone amount: ${milestones.reduce((sum, m) => sum + parseFloat(m.amount || 0), 0).toFixed(2)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Delivery Time */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Delivery Time (days) *
+                </label>
+                <input
+                  type="number"
+                  value={formData.estimated_delivery}
+                  onChange={(e) => handleInputChange('estimated_delivery', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="14"
+                  min="1"
+                  required
+                />
+                {jobData.deadline && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Project deadline: {new Date(jobData.deadline).toLocaleDateString()}
+                  </p>
+                )}
               </div>
 
               {/* File Attachments */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Attachments (Optional)
+                  Portfolio/Attachments (Optional)
                 </label>
                 <div 
                   className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
@@ -382,11 +711,11 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
                 >
                   <Upload size={32} className="mx-auto text-gray-400 mb-4" />
                   <p className="text-gray-600 mb-2">Drop files here or click to browse</p>
-                  <p className="text-xs text-gray-500">Support: PDF, DOC, DOCX, JPG, PNG, GIF (Max: 10MB each, 5 files total)</p>
+                  <p className="text-xs text-gray-500">Support: PDF, DOC, DOCX, JPG, PNG, GIF, TXT (Max: 10MB each, 5 files total)</p>
                   <input
                     type="file"
                     multiple
-                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt"
                     onChange={(e) => handleFileSelect(e.target.files)}
                     className="hidden"
                     id="file-upload"
@@ -435,7 +764,7 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || !formData.cover_letter || !formData.bid_amount || !formData.delivery_time}
+                  disabled={submitting || !formData.proposal || formData.proposal.length < 50}
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
                 >
                   {submitting ? (
@@ -446,7 +775,7 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
                   ) : (
                     <>
                       <Send size={16} />
-                      Submit Application
+                      Submit Proposal
                     </>
                   )}
                 </button>
