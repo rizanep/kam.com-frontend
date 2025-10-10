@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { NotificationWebSocket } from '../services/notificationsApi';
 import { useAuth } from './AuthContext';
-import { toast } from 'react-toastify';
+import { toast } from "sonner"
 
 const NotificationContext = createContext();
 

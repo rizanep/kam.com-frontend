@@ -79,7 +79,7 @@ const JobCard = ({
     if (diffDays <= 7) return { status: 'soon', days: diffDays };
     return { status: 'normal', days: diffDays };
   };
-
+console.log(job)
   const deadlineInfo = calculateDeadlineUrgency();
   return (
     <div 

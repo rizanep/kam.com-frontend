@@ -49,7 +49,7 @@ const ClientDashboard = () => {
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Link
-            to="/client/post-job"
+            to="/jobs/post"
             className="flex items-center justify-between bg-blue-600 text-white p-6 rounded-lg hover:bg-blue-700"
           >
             <div>

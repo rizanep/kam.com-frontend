@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
 import ReCAPTCHA from "react-google-recaptcha";
-import { toast } from 'react-toastify';
+import { toast } from "sonner"
 
 const Register = () => {
   const [searchParams] = useSearchParams();

@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8001/api/jobs';
+const API_BASE_URL = 'http://localhost:8011/api/jobs';
 const USERS_API_URL = 'http://localhost:8000/api/auth';
 
 const getAuthToken = () => {

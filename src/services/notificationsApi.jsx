@@ -71,7 +71,7 @@ export const notificationsApi = {
   // Mark single notification as read
   async markNotificationRead(notificationId) {
     try {
-      const response = await apiClient.post(`/notifications/${notificationId}/read/`);
+      const response = await apiClient.patch(`/notifications/${notificationId}/read/`);
       return response.data;
     } catch (error) {
       console.error('Error marking notification as read:', error);
@@ -93,7 +93,7 @@ export const notificationsApi = {
   // Delete notification (if supported by backend)
   async deleteNotification(notificationId) {
     try {
-      const response = await apiClient.delete(`/notifications/${notificationId}/`);
+      const response = await apiClient.delete(`/notifications/${notificationId}/delete/`);
       return response.data;
     } catch (error) {
       console.error('Error deleting notification:', error);

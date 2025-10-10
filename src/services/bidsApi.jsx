@@ -1,5 +1,5 @@
 const BIDS_API_URL = 'http://localhost:8002/api/bids';
-const JOBS_API_URL = 'http://localhost:8001/api/jobs';
+const JOBS_API_URL = 'http://localhost:8011/api/jobs';
 
 const getAuthToken = () => {
   return localStorage.getItem('access_token');

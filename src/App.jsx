@@ -5,7 +5,7 @@ import { NotificationProvider } from './context/NotificationContext'
 import { JobProvider } from './context/JobContext'
 import { BidsProvider } from './context/BidsContext'
 import { useLocation } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify'
+// import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
 // Pages
@@ -33,6 +33,10 @@ import SavedJobsPage from './pages/Jobs/SavedJobsPage'
 import MessagingSystem from './pages/Messages/MessagingSystem'
 import NotificationsPage from './pages/NotificationsPage'
 import AIChatWidget from './pages/AIChatWidget'
+import AcceptedBidsPaymentPage from './pages/Client/AcceptedBidsPaymentPage'
+import FreelancerAcceptedBidsPage from './pages/Freelancer/AcceptedBidsPage'
+import MessagesPage from './pages/Messages/MessagesPage'
+import { Toaster } from './components/ui/sonner'
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
@@ -124,7 +128,7 @@ const AppRoutes = () => {
           <Route 
             path="/jobs/*" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute  >
                 <JobProvider>
                   <JobsMainPage />
                 </JobProvider>
@@ -152,6 +156,25 @@ const AppRoutes = () => {
                     onPostJob={() => window.location.href = '/jobs/post'}
                   />
                 </JobProvider>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/client/accepted" 
+            element={
+              <ProtectedRoute allowedRoles={['client']}>
+               
+                  <AcceptedBidsPaymentPage/>
+           
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/freelancer/accepted" 
+            element={
+              <ProtectedRoute allowedRoles={['freelancer']}>
+               
+<FreelancerAcceptedBidsPage/>           
               </ProtectedRoute>
             } 
           />
@@ -260,7 +283,7 @@ const AppRoutes = () => {
             path="/messages" 
             element={
               <ProtectedRoute>
-                <MessagingSystem />
+                <MessagesPage/>
               </ProtectedRoute>
             } 
           />
@@ -305,9 +328,28 @@ const AppRoutes = () => {
       </main>
        {/* Conditionally render footer */}
       {showFooter && <Footer />}
-      <AIChatWidget />
+      {showFooter &&< AIChatWidget />}
+    <Toaster
+        position="bottom-center" 
+        closeButton    // 👆 moves it up
+        toastOptions={{
+          style: {
+            background: "white", // 💙 blue background
+            color: "#007BFF",        // white text
+            borderRadius: "8px",
+            fontSize: "15px",
+            padding: "12px 16px",
+            display: "flex",
+            justifyContent: "space-between", // ensures content + close button align
+            alignItems: "center",
+            gap: "10px",
+          },
+        }}
+             // optional: makes toasts vibrant
+           // adds a small close icon
+      />
       {/* Toast Container with custom styles for notifications */}
-      <ToastContainer
+      {/* <ToastContainer
         position="top-right"
         autoClose={5000}
         hideProgressBar={false}
@@ -329,28 +371,7 @@ const AppRoutes = () => {
       />
       
       {/* Custom CSS for notification toasts */}
-      <style jsx global>{`
-        .notification-toast {
-          background: transparent !important;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
-          border-radius: 0.5rem !important;
-          padding: 0 !important;
-        }
-        
-        .notification-toast .Toastify__toast-body {
-          padding: 0 !important;
-          margin: 0 !important;
-        }
-        
-        .custom-toast-container .Toastify__toast--info {
-          background: transparent !important;
-        }
-        
-        .custom-toast {
-          border-radius: 0.5rem;
-          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-      `}</style>
+      
     </div>
   );
 };

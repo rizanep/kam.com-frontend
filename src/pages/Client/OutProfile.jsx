@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Star, MapPin, Calendar, ExternalLink, ChevronDown, ChevronUp, Globe, Linkedin, Github, Award, Briefcase, GraduationCap, Building, User, Shield } from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect, useContext } from 'react';
+import { Star, MapPin, Calendar, ExternalLink, ChevronDown, ChevronUp, Globe, Linkedin, Github, Award, Briefcase, GraduationCap, Building, User, Shield, MessageCircle } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import AuthContext from '../../context/AuthContext'; // Adjust path as needed
 
 const PublicProfile = ({ apiBaseUrl = 'http://localhost:8000/api/auth' }) => {
   const [profile, setProfile] = useState(null);
@@ -9,7 +10,10 @@ const PublicProfile = ({ apiBaseUrl = 'http://localhost:8000/api/auth' }) => {
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [activeAccountType, setActiveAccountType] = useState('freelancer');
   const { userId } = useParams();
-  const token= localStorage.getItem("access_token")
+  const navigate = useNavigate();
+  const { user } = useContext(AuthContext); // Get current logged-in user
+  const token = localStorage.getItem("access_token");
+
   useEffect(() => {
     fetchUserProfile();
   }, [userId]);
@@ -43,6 +47,32 @@ const PublicProfile = ({ apiBaseUrl = 'http://localhost:8000/api/auth' }) => {
     }
   };
 
+  // Handle message button click
+  const handleMessageUser = () => {
+    if (!user) {
+      // Redirect to login if not authenticated
+      navigate('/login', { state: { from: `/profile/${userId}` } });
+      return;
+    }
+
+    // Build full name or username
+    const recipientName = profile.full_name || 
+                         (profile.first_name && profile.last_name 
+                           ? `${profile.first_name} ${profile.last_name}` 
+                           : profile.username);
+
+    // Navigate to messages with profile context
+    const params = new URLSearchParams({
+      recipient: userId,
+      name: recipientName,
+      profilePicture: profile.profile_picture || '',
+      messageType: 'direct',
+      autoStart: 'true'
+    });
+    
+    navigate(`/messages?${params.toString()}`);
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -73,16 +103,7 @@ const PublicProfile = ({ apiBaseUrl = 'http://localhost:8000/api/auth' }) => {
       />
     ));
   };
-const wsUrl = `ws://localhost:8003/ws/notifications/?token=${token}`;
-const socket = new WebSocket(wsUrl);
 
-socket.onmessage = function(event) {
-    const data = JSON.parse(event.data);
-    if (data.type === 'notification') {
-        // Handle bid notifications
-        console.log(data.data);
-    }
-};
   const getSocialIcon = (platform) => {
     switch (platform) {
       case 'linkedin': return <Linkedin className="w-4 h-4" />;
@@ -140,7 +161,7 @@ socket.onmessage = function(event) {
 
   if (!profile) return null;
 
-  // Mock reviews data since it's not in your current model structure
+  // Mock reviews data
   const mockReviews = [
     {
       id: 1,
@@ -183,6 +204,9 @@ socket.onmessage = function(event) {
 
   const currentProfileData = getCurrentProfileData();
   const professionalProfile = profile.professional_profile || {};
+
+  // Check if viewing own profile
+  const isOwnProfile = user && String(user.id) === String(userId);
 
   return (
     <div className="max-w-4xl mx-auto bg-white min-h-screen">
@@ -232,10 +256,10 @@ socket.onmessage = function(event) {
 
         {/* Profile Header */}
         <div className="flex items-start gap-6 mb-8">
-          <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200">
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
             {profile.profile_picture ? (
               <img
-                src={`http://localhost:8000/${profile.profile_picture}`}
+                src={`http://localhost:8000${profile.profile_picture}`}
                 alt={profile.full_name || profile.username}
                 className="w-full h-full object-cover"
               />
@@ -246,7 +270,7 @@ socket.onmessage = function(event) {
             )}
           </div>
           
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h2 className="text-2xl font-bold text-gray-900 mb-1">
               {profile.full_name || profile.username}
             </h2>
@@ -307,7 +331,7 @@ socket.onmessage = function(event) {
             </div>
           </div>
           
-          <div className="text-right">
+          <div className="text-right flex-shrink-0">
             {activeAccountType === 'freelancer' && currentProfileData.hourly_rate && (
               <>
                 <div className="text-2xl font-bold text-gray-900 mb-1">
@@ -532,7 +556,7 @@ socket.onmessage = function(event) {
               </div>
             )}
 
-            {/* Rating and Reviews - Only for freelancers */}
+            {/* Rating and Reviews */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">Reviews & Rating</h3>
@@ -564,7 +588,7 @@ socket.onmessage = function(event) {
                 </div>
               </div>
 
-              {/* Individual Reviews - Using mock data for now */}
+              {/* Individual Reviews */}
               {mockReviews.length > 0 && (
                 <>
                   <div className="space-y-6">
@@ -709,14 +733,34 @@ socket.onmessage = function(event) {
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-4">
-          <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors">
-            Contact {profile.full_name || profile.username}
-          </button>
-          <button className="flex-1 border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 px-6 rounded-lg transition-colors">
-            Save Profile
-          </button>
-        </div>
+        {!isOwnProfile && (
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button 
+              onClick={handleMessageUser}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <MessageCircle className="w-5 h-5" />
+              Message {profile.first_name || profile.username}
+            </button>
+            <button className="flex-1 border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 px-6 rounded-lg transition-colors">
+              Save Profile
+            </button>
+          </div>
+        )}
+
+        {/* Own Profile Message */}
+        {isOwnProfile && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <p className="text-blue-800 font-medium mb-2">This is your public profile</p>
+            <p className="text-blue-600 text-sm">This is how other users see your profile</p>
+            <button 
+              onClick={() => navigate('/profile/edit')}
+              className="mt-3 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
+            >
+              Edit Profile
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

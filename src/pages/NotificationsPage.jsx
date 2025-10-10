@@ -6,7 +6,7 @@ import {
   Archive, X, Filter
 } from 'lucide-react';
 import { notificationsApi, NotificationWebSocket } from '../services/notificationsApi';
-import { toast } from 'react-toastify';
+import { toast } from "sonner"
 import { useAuth } from '../context/AuthContext';
 
 const NotificationsPage = () => {
@@ -27,6 +27,7 @@ const NotificationsPage = () => {
   const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState('all'); // 'all', 'unread', 'read'
   
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({
@@ -459,11 +460,9 @@ const NotificationsPage = () => {
     
     return matchesSearch;
   });
-
   // Separate unread and read notifications
   const unreadNotifications = filteredNotifications.filter(n => n.status !== 'read');
   const readNotifications = filteredNotifications.filter(n => n.status === 'read');
-
   // Show loading if user not authenticated
   if (!user) {
     return (
@@ -569,7 +568,8 @@ const NotificationsPage = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-500">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">{notificationStats.total || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">{notificationStats.total_notifications
+ || 0}</p>
                 </div>
               </div>
             </div>
@@ -581,7 +581,7 @@ const NotificationsPage = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-500">Unread</p>
-                  <p className="text-2xl font-bold text-gray-900">{notificationStats.unread || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">{notificationStats.unread_count || 0}</p>
                 </div>
               </div>
             </div>
@@ -593,7 +593,7 @@ const NotificationsPage = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-500">Read</p>
-                  <p className="text-2xl font-bold text-gray-900">{notificationStats.read || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">{notificationStats.read_count || 0}</p>
                 </div>
               </div>
             </div>
@@ -705,18 +705,18 @@ const NotificationsPage = () => {
           {viewMode === 'all' ? (
             <>
               {/* Unread Notifications Section */}
-              {unreadNotifications.length > 0 && (
+              {filteredNotifications.length > 0 && (
                 <div className="bg-white rounded-lg border border-gray-200">
-                  <div className="p-4 border-b border-gray-200 bg-red-50">
+                  <div className="p-4 border-b border-gray-200 bg-green-50">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                        <Eye className="text-red-600" size={20} />
-                        Unread Notifications ({unreadNotifications.length})
+                        <Eye className="text-green-600" size={20} />
+                        All Notifications ({filteredNotifications.length})
                       </h3>
                     </div>
                   </div>
                   <NotificationsList 
-                    notifications={unreadNotifications}
+                    notifications={filteredNotifications}
                     selectedNotifications={selectedNotifications}
                     onSelectNotification={handleSelectNotification}
                     onNotificationClick={handleNotificationClick}

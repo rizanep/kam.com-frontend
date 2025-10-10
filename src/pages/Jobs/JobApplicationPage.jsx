@@ -709,7 +709,7 @@ const JobApplicationPage = ({ job, jobId, onBack, onSuccess }) => {
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                 >
-                  <Upload size={32} className="mx-auto text-gray-400 mb-4" />
+                  <Upload size={32} className="mx-autoat text-gray-400 mb-4" />
                   <p className="text-gray-600 mb-2">Drop files here or click to browse</p>
                   <p className="text-xs text-gray-500">Support: PDF, DOC, DOCX, JPG, PNG, GIF, TXT (Max: 10MB each, 5 files total)</p>
                   <input

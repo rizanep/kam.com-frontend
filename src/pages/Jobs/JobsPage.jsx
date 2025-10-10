@@ -89,15 +89,22 @@ const JobsPage = ({ onJobClick, onJobApply }) => {
   const perPage = pagination.pageSize || jobs.length;
   const startIndex = (pagination.currentPage - 1) * perPage + 1;
   const endIndex = startIndex + jobs.length - 1;
-const handleMessageClient = (clientId, clientInfo) => {
-  // Navigate to messaging page with recipient information
+const handleMessageClient = (clientId, clientInfo, job) => {
+  // Build comprehensive parameters for the messaging page
   const params = new URLSearchParams({
+    // Recipient information
     recipient: clientId,
     name: clientInfo?.first_name && clientInfo?.last_name 
       ? `${clientInfo.first_name} ${clientInfo.last_name}`
       : clientInfo?.username || 'Client',
     profilePicture: clientInfo?.profile_picture || '',
-    messageType: 'job', // This will be a job-related conversation
+    
+    // Job context
+    jobId: job?.id || '',
+    jobTitle: job?.title || '',
+    
+    // Message settings
+    messageType: 'Job Inquiry',
     autoStart: 'true'
   });
   
@@ -234,20 +241,20 @@ const handleMessageClient = (clientId, clientInfo) => {
             </div>
           ) : (
             <>
-              {jobs.map((job) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  onJobClick={onJobClick}
-                  onSave={handleSave}
-                  onApply={onJobApply}
-                  onMessageClient={handleMessageClient}
-                  onClientClick={(clientId) => {
-                    navigate(`/freelancer/profile/${clientId}`);
-                  }}
-                  currentUserId={user?.id} // Pass current user's ID
-                  userRole={user.account_types} // Pass user role
-                />
+              {jobs.filter((job)=>job.client_info.id!=user.id).map((job) => (
+                 <JobCard
+    key={job.id}
+    job={job}
+    onJobClick={onJobClick}
+    onSave={handleSave}
+    onApply={onJobApply}
+    onMessageClient={(clientId, clientInfo) => handleMessageClient(clientId, clientInfo, job)}
+    onClientClick={(clientId) => {
+      navigate(`/freelancer/profile/${clientId}`);
+    }}
+    currentUserId={user?.id}
+    userRole={user?.account_types}
+  />
               ))}
 
               {/* Pagination */}

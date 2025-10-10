@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   Menu as MenuIcon,
@@ -13,7 +13,9 @@ import {
   Settings,
   ChevronDown,
   Shield,
-  Briefcase
+  Briefcase,
+  Bookmark,
+  CheckCircle
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -22,28 +24,50 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const location = useLocation()
+  const dropdownRef = useRef(null)
 
   const isAuthenticated = !!user
   const userRole = user?.user_type
   const accountTypes = user?.account_types || []
+  console.log(user)
   
   // Check if user has multiple roles
   const isClient = accountTypes.includes('client') || userRole === 'client'
   const isFreelancer = accountTypes.includes('freelancer') || userRole === 'freelancer'
   const isAdmin = accountTypes.includes('admin') || userRole === 'admin' || user?.is_staff
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowUserMenu(false)
+      }
+    }
 
+    if (showUserMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showUserMenu])
+  
   // Simplified navigation items
   const getNavigationItems = () => {
     if (!isAuthenticated) return []
 
-    const items = [
-      {
+    const items = []
+
+    // Browse Jobs - exclude for admin-only users
+    if (!isAdmin || isClient || isFreelancer) {
+      items.push({
         to: '/jobs',
         label: 'Browse Jobs',
         icon: Search,
         active: location.pathname.startsWith('/jobs')
-      }
-    ]
+      })
+    }
 
     // Role-specific dashboard
     if (isClient) {
@@ -53,6 +77,8 @@ const Navbar = () => {
         icon: Briefcase,
         active: location.pathname.includes('/client/dashboard')
       })
+      
+      
     } else if (isFreelancer) {
       items.push({
         to: '/freelancer/dashboard',
@@ -60,6 +86,7 @@ const Navbar = () => {
         icon: Briefcase,
         active: location.pathname.includes('/freelancer/dashboard')
       })
+      
     }
 
     if (isAdmin) {
@@ -72,7 +99,7 @@ const Navbar = () => {
     }
 
     // Quick actions
-    if (isClient || isFreelancer) {
+    if (isClient ) {
       items.push({
         to: '/jobs/post',
         label: 'Post Job',
@@ -110,7 +137,6 @@ const Navbar = () => {
   // User dropdown menu items
   const userMenuItems = [
     { to: '/profile', label: 'Profile', icon: UserIcon },
-    { to: '/user/resetpass', label: 'Settings', icon: Settings },
   ]
 
   // Role-specific menu items
@@ -120,6 +146,18 @@ const Navbar = () => {
       label: 'My Proposals',
       icon: FileText
     })
+    userMenuItems.unshift({
+        to: '/client/saved-jobs',
+        label: 'Saved Jobs',
+        icon: Bookmark,
+        active: location.pathname.includes('/client/saved-jobs')
+      })
+      userMenuItems.unshift({
+        to: '/freelancer/accepted',
+        label: 'Accepted Proposals',
+        icon: CheckCircle,
+        active: location.pathname.includes('/freelancer/accepted')
+      })
   }
 
   if (isClient) {
@@ -135,6 +173,12 @@ const Navbar = () => {
         icon: FileText
       }
     )
+    userMenuItems.unshift({
+        to: '/client/accepted',
+        label: 'Accepted Bids',
+        icon: CheckCircle,
+        active: location.pathname.includes('/client/accepted')
+      })
   }
 
   return (
@@ -213,7 +257,7 @@ const Navbar = () => {
               </Link>
 
               {/* User Profile Menu */}
-              <div className="relative">
+              <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center space-x-2 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 p-1 hover:bg-gray-50 transition-colors"
@@ -221,7 +265,7 @@ const Navbar = () => {
                   <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
                     {user?.profile_picture ? (
                       <img
-                        src={`http://localhost:8000/${user.profile_picture}`}
+                        src={`${user.profile_picture}`}
                         alt="Profile"
                         className="h-8 w-8 rounded-full object-cover"
                       />
@@ -390,7 +434,7 @@ const Navbar = () => {
                     <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
                       {user?.profile_picture ? (
                         <img
-                          src={ `http://localhost:8000/${user.profile_picture}`}
+                          src={`${user.profile_picture}`}
                           alt="Profile"
                           className="h-10 w-10 rounded-full object-cover"
                         />
