@@ -883,13 +883,13 @@ const BidsManagementDashboard = () => {
                   {actionLoading[bid.id] === 'rejected' ? 'Declining...' : 'Decline'}
                 </button>
                 <button
-                  onClick={() => handleAcceptBid(bid)}
+                  onClick={() => handleBidStatusUpdate(selectedBid.id, 'accepted')}
                   disabled={actionLoading[bid.id] === 'accepted'}
                   className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm disabled:opacity-50 flex items-center gap-1"
                 >
                   {actionLoading[bid.id] === 'accepted' ? 'Accepting...' : (
                     <>
-                      <CreditCard size={14} />
+                  
                       Accept & Pay
                     </>
                   )}
@@ -975,7 +975,6 @@ const BidsManagementDashboard = () => {
                     }}
                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
                   >
-                    <CreditCard size={16} />
                     Accept & Pay
                   </button>
                 </>

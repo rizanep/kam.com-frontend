@@ -91,15 +91,28 @@ export const notificationsApi = {
   },
 
   // Delete notification (if supported by backend)
-  async deleteNotification(notificationId) {
-    try {
-      const response = await apiClient.delete(`/notifications/${notificationId}/delete/`);
-      return response.data;
-    } catch (error) {
-      console.error('Error deleting notification:', error);
-      throw error;
-    }
-  },
+  // Delete notification (with optional service token)
+async deleteNotification(notificationId) {
+  const headers = {
+      'Content-Type': 'application/json',
+    };
+
+    // Use service token if provided
+ 
+      headers.Authorization = `Bearer secure-service-token-123`;
+
+      // fallback to user token
+   
+
+    const response = await apiClient.delete(
+      `/notifications/${notificationId}/delete/`,
+      { headers }
+    );
+    console.log(headers)
+    return response.data;
+ 
+}
+,
 
   // Create notification (for admin/service use)
   async createNotification(notificationData) {
