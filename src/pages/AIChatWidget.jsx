@@ -21,7 +21,7 @@ const AIChatWidget = () => {
   const isAuthenticated = !!user;
 
   // API Configuration
-  const API_BASE_URL = 'http://13.201.35.131:31605';
+  const API_BASE_URL = 'https://kamcomuser.duckdns.org:30443';
   
   const getAuthToken = () => {
     return localStorage.getItem('access_token');

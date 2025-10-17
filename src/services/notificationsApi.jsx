@@ -1,7 +1,7 @@
 // src/services/notificationsApi.js
 import axios from 'axios';
 
-const API_BASE_URL =  'http://13.201.35.131:31605/api';
+const API_BASE_URL =  'https://kamcomuser.duckdns.org:30443/api';
 
 // Create axios instance with default config
 const apiClient = axios.create({

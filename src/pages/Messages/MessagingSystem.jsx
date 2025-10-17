@@ -31,7 +31,7 @@ const currentUserId = payload?.user_id;
 const currentUsername = payload?.username;
 
 const MessagingSystem = ({ 
-  apiBaseUrl = 'http://13.201.35.131:31605',
+  apiBaseUrl = 'https://kamcomuser.duckdns.org:30443',
   wsBaseUrl = 'ws://13.201.35.131:31605/ws',
   initialConversationId = null,
   onNewMessage = null,

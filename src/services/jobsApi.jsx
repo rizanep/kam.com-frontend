@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://65.1.106.128:31342/api/jobs';
+const API_BASE_URL = 'https://kamcomuser.duckdns.org:30443/api/jobs';
 const USERS_API_URL = 'https://kamcomuser.duckdns.org:30443/api/auth';
 
 const getAuthToken = () => {
