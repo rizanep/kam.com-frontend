@@ -1,5 +1,5 @@
-const API_BASE_URL = 'http://localhost:8011/api/jobs';
-const USERS_API_URL = 'http://localhost:8000/api/auth';
+const API_BASE_URL = 'http://65.1.106.128:31342/api/jobs';
+const USERS_API_URL = 'https://kamcomuser.duckdns.org:30443/api/auth';
 
 const getAuthToken = () => {
   return localStorage.getItem('access_token');

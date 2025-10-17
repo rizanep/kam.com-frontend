@@ -68,8 +68,8 @@ const MessagesPage = () => {
       {/* Messaging System */}
       <div className="flex-1 overflow-hidden">
         <MessagingSystem
-          apiBaseUrl="http://localhost:8003/api"
-          wsBaseUrl="ws://localhost:8003/ws"
+          apiBaseUrl="http://13.201.35.131:31605/api"
+          wsBaseUrl="ws://13.201.35.131:31605/ws"
           messageRecipient={messageRecipient}
           messageJobContext={messageJobContext}
           messageType={messageType}

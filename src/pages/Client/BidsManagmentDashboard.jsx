@@ -150,7 +150,7 @@ const BidsManagementDashboard = () => {
       console.log('Fetching AI scores with payload:', payload);
 
       const response = await axios.post(
-        'http://localhost:8004/api/scoring/match-job/',
+        'http://43.205.210.13:30992/api/scoring/match-job/',
         payload
       );
 

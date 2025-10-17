@@ -80,7 +80,7 @@ const ChangePassword = () => {
       // Get the auth token from localStorage or wherever you store it
       const token = localStorage.getItem('authToken'); // Adjust based on your auth implementation
       
-      const response = await fetch('http://localhost:8000/api/auth/change-password/', {
+      const response = await fetch('https://kamcomuser.duckdns.org:30443/api/auth/change-password/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

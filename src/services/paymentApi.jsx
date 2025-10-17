@@ -3,7 +3,7 @@
 import axios from 'axios';
 import { toast } from "sonner"
 
-const API_BASE_URL =  'http://localhost:8002/api/bids';
+const API_BASE_URL =  'http://65.2.30.155:32675/api/bids';
 
 class PaymentApiService {
   constructor() {

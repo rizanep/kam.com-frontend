@@ -117,7 +117,7 @@ const Login = () => {
 
     try {
       const res = await axios.post(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/auth/google/`,
+        `${import.meta.env.VITE_API_URL || 'https://kamcomuser.duckdns.org:30443/api'}/auth/google/`,
         { credential: credentialResponse.credential },
         { headers: { 'Content-Type': 'application/json' } }
       );

@@ -1,7 +1,7 @@
 // src/services/notificationsApi.js
 import axios from 'axios';
 
-const API_BASE_URL =  'http://localhost:8003/api';
+const API_BASE_URL =  'http://13.201.35.131:31605/api';
 
 // Create axios instance with default config
 const apiClient = axios.create({
@@ -144,7 +144,7 @@ export class NotificationWebSocket {
       return;
     }
 
-    const wsUrl = `ws://localhost:8003/ws/notifications/?token=${token}`;
+    const wsUrl = `ws://13.201.35.131:31605/ws/notifications/?token=${token}`;
     
     try {
       this.ws = new WebSocket(wsUrl);

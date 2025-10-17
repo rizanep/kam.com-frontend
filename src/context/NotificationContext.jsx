@@ -127,7 +127,7 @@ export const NotificationProvider = ({ children }) => {
 
   const loadUnreadCount = async () => {
     try {
-      const response = await fetch('http://localhost:8003/api/notifications/stats/', {
+      const response = await fetch('http://13.201.35.131:31605/api/notifications/stats/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json'

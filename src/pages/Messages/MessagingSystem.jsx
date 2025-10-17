@@ -31,8 +31,8 @@ const currentUserId = payload?.user_id;
 const currentUsername = payload?.username;
 
 const MessagingSystem = ({ 
-  apiBaseUrl = 'http://localhost:8003/api',
-  wsBaseUrl = 'ws://localhost:8003/ws',
+  apiBaseUrl = 'http://13.201.35.131:31605',
+  wsBaseUrl = 'ws://13.201.35.131:31605/ws',
   initialConversationId = null,
   onNewMessage = null,
   onConversationChange = null,
@@ -116,7 +116,7 @@ const MessagingSystem = ({
     userFetchCache.current.add(userIdToFetch);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/auth/users/${userIdToFetch}/profile/`, {
+      const response = await fetch(`https://kamcomuser.duckdns.org:30443/api/auth/users/${userIdToFetch}/profile/`, {
         headers: {
           'Authorization': "Bearer secure-service-token-123",
           'Content-Type': 'application/json',

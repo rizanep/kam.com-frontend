@@ -241,7 +241,7 @@ const handleMessageClient = (clientId, clientInfo, job) => {
             </div>
           ) : (
             <>
-              {jobs.filter((job)=>job.client_info.id!=user.id).map((job) => (
+              {jobs.map((job) => (
                  <JobCard
     key={job.id}
     job={job}

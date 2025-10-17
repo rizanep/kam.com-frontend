@@ -21,7 +21,7 @@ const AIChatWidget = () => {
   const isAuthenticated = !!user;
 
   // API Configuration
-  const API_BASE_URL = 'http://localhost:8003';
+  const API_BASE_URL = 'http://13.201.35.131:31605';
   
   const getAuthToken = () => {
     return localStorage.getItem('access_token');
