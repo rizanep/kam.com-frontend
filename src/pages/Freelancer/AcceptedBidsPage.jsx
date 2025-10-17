@@ -12,7 +12,7 @@ import { toast } from "sonner"
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE_URL =  'http://65.2.30.155:32675/api/bids';
+const API_BASE_URL =  'https://kamcomuser.duckdns.org:30443/api/bids';
 
 const FreelancerAcceptedBidsPage = () => {
   const { user } = useContext(AuthContext);
