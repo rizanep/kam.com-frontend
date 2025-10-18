@@ -144,7 +144,7 @@ export class NotificationWebSocket {
       return;
     }
 
-    const wsUrl = `ws://13.201.35.131:31605/ws/notifications/?token=${token}`;
+    const wsUrl = `wss://kamcomuser.duckdns.org:30443/ws/notifications/?token=${token}`;
     
     try {
       this.ws = new WebSocket(wsUrl);
