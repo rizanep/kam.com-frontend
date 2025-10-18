@@ -5,7 +5,7 @@ import {
   MessageCircle
 } from 'lucide-react';
 
-const API_BASE_URL = 'https://kamcomuser.duckdns.org:30443';
+const API_BASE_URL = 'https://kamcomuser.duckdns.org';
 
 const JobCard = ({ 
   job, 

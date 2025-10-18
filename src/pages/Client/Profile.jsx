@@ -38,7 +38,7 @@ import {
   UserMinusIcon,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
-const API_BASE_URL = "https://kamcomuser.duckdns.org:30443/api/auth";
+const API_BASE_URL = "https://kamcomuser.duckdns.org/api/auth";
 
 const UserProfile = () => {
   // Main state
@@ -2228,7 +2228,7 @@ const handleProfilePictureChange = async (e) => {
                 <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center">
                   {user.profile_picture ? (
                     <img
-                      src={`https://kamcomuser.duckdns.org:30443${user.profile_picture}`}
+                      src={`https://kamcomuser.duckdns.org${user.profile_picture}`}
                       alt="Profile"
                       className="w-24 h-24 rounded-full object-cover"
                     />

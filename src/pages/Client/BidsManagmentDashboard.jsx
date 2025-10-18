@@ -150,7 +150,7 @@ const BidsManagementDashboard = () => {
       console.log('Fetching AI scores with payload:', payload);
 
       const response = await axios.post(
-        'https://kamcomuser.duckdns.org:30443/api/scoring/match-job/',
+        'https://kamcomuser.duckdns.org/api/scoring/match-job/',
         payload
       );
 

@@ -1,7 +1,7 @@
 // src/services/notificationsApi.js
 import axios from 'axios';
 
-const API_BASE_URL =  'https://kamcomuser.duckdns.org:30443/api';
+const API_BASE_URL =  'https://kamcomuser.duckdns.org/api';
 
 // Create axios instance with default config
 const apiClient = axios.create({
@@ -144,7 +144,7 @@ export class NotificationWebSocket {
       return;
     }
 
-    const wsUrl = `wss://kamcomuser.duckdns.org:30443/ws/notifications/?token=${token}`;
+    const wsUrl = `wss://kamcomuser.duckdns.org/ws/notifications/?token=${token}`;
     
     try {
       this.ws = new WebSocket(wsUrl);

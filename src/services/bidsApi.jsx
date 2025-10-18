@@ -1,5 +1,5 @@
-const BIDS_API_URL = 'https://kamcomuser.duckdns.org:30443/api/bids';
-const JOBS_API_URL = 'https://kamcomuser.duckdns.org:30443/api/jobs';
+const BIDS_API_URL = 'https://kamcomuser.duckdns.org/api/bids';
+const JOBS_API_URL = 'https://kamcomuser.duckdns.org/api/jobs';
 
 const getAuthToken = () => {
   return localStorage.getItem('access_token');

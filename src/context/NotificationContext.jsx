@@ -127,7 +127,7 @@ export const NotificationProvider = ({ children }) => {
 
   const loadUnreadCount = async () => {
     try {
-      const response = await fetch('https://kamcomuser.duckdns.org:30443/api/notifications/stats/', {
+      const response = await fetch('https://kamcomuser.duckdns.org/api/notifications/stats/', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json'

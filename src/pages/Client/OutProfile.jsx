@@ -3,7 +3,7 @@ import { Star, MapPin, Calendar, ExternalLink, ChevronDown, ChevronUp, Globe, Li
 import { useParams, useNavigate } from 'react-router-dom';
 import AuthContext from '../../context/AuthContext'; // Adjust path as needed
 
-const PublicProfile = ({ apiBaseUrl = 'https://kamcomuser.duckdns.org:30443/api/auth' }) => {
+const PublicProfile = ({ apiBaseUrl = 'https://kamcomuser.duckdns.org/api/auth' }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -259,7 +259,7 @@ const PublicProfile = ({ apiBaseUrl = 'https://kamcomuser.duckdns.org:30443/api/
           <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
             {profile.profile_picture ? (
               <img
-                src={`https://kamcomuser.duckdns.org:30443${profile.profile_picture}`}
+                src={`https://kamcomuser.duckdns.org${profile.profile_picture}`}
                 alt={profile.full_name || profile.username}
                 className="w-full h-full object-cover"
               />

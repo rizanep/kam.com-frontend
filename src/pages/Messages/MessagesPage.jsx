@@ -68,8 +68,8 @@ const MessagesPage = () => {
       {/* Messaging System */}
       <div className="flex-1 overflow-hidden">
         <MessagingSystem
-          apiBaseUrl="https://kamcomuser.duckdns.org:30443/api"
-          wsBaseUrl="wss://kamcomuser.duckdns.org:30443/ws"
+          apiBaseUrl="https://kamcomuser.duckdns.org/api"
+          wsBaseUrl="wss://kamcomuser.duckdns.org/ws"
           messageRecipient={messageRecipient}
           messageJobContext={messageJobContext}
           messageType={messageType}

@@ -840,7 +840,7 @@ const JobDetailPage = ({ jobId, onBack, onApply }) => {
                   <div className="flex-shrink-0">
                     {job.client_info.profile_picture ? (
                       <img 
-                        src={`https://kamcomuser.duckdns.org:30443/${job.client_info.profile_picture}`} 
+                        src={`https://kamcomuser.duckdns.org/${job.client_info.profile_picture}`} 
                         alt={job.client_info.username}
                         className="w-12 h-12 rounded-full object-cover"
                       />

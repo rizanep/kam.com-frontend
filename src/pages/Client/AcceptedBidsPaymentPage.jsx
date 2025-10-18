@@ -11,7 +11,7 @@ import { toast } from "sonner"
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE_URL =  'https://kamcomuser.duckdns.org:30443/api/bids';
+const API_BASE_URL =  'https://kamcomuser.duckdns.org/api/bids';
 
 const AcceptedBidsPaymentPage = () => {
   const { user } = useContext(AuthContext);

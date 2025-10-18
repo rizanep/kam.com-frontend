@@ -3,7 +3,7 @@
 import axios from 'axios';
 import { toast } from "sonner"
 
-const API_BASE_URL =  'https://kamcomuser.duckdns.org:30443/api/bids';
+const API_BASE_URL =  'https://kamcomuser.duckdns.org/api/bids';
 
 class PaymentApiService {
   constructor() {
